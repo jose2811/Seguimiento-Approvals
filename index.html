@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Seguimiento a Aceptados</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f3d6e">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
 :root{--bg:#f3f4f6;--card:#fff;--ink:#1d2330;--mut:#6b7280;--line:#e5e7eb;--pri:#0f3d6e;--pri2:#1d5fa3;--ok:#15803d;--okb:#dcfce7;--warn:#b45309;--warnb:#fef3c7;--bad:#b91c1c;--badb:#fee2e2;--bad2:#7f1d1d;--chip:#eef2f7}
 *{box-sizing:border-box}
@@ -123,7 +127,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Seguimiento a Aceptados<small>v0.4.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Seguimiento a Aceptados<small>v0.4.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar export</button>
@@ -157,7 +161,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.4.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.4.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -879,6 +883,8 @@ function renderConc(){
 
 reindex();fillVista();
 if(SES&&SES.perfil){aplicaPerfil();render();sincroniza(false);}else{render();showLogin();}
+// Copia guardada para abrir aunque no haya señal (mismo esquema que la Agenda del Asesor)
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 </script>
 </body>
 </html>
