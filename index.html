@@ -6,8 +6,8 @@
 <title>Seguimiento a Aceptados</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f3d6e">
-<link rel="icon" href="icons/favicon-32.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png?v=3">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3">
 <style>
 :root{--bg:#f3f4f6;--card:#fff;--ink:#1d2330;--mut:#6b7280;--line:#e5e7eb;--pri:#0f3d6e;--pri2:#1d5fa3;--ok:#15803d;--okb:#dcfce7;--warn:#b45309;--warnb:#fef3c7;--bad:#b91c1c;--badb:#fee2e2;--bad2:#7f1d1d;--chip:#eef2f7}
 *{box-sizing:border-box}
@@ -127,7 +127,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Seguimiento a Aceptados<small>v0.4.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Seguimiento a Aceptados<small>v0.4.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar export</button>
@@ -161,7 +161,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.4.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.4.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -871,7 +871,7 @@ function renderConc(){
     ${sucRows}${VISTA==='GP'?rowSuc('Total región',T,true):''}
   </table></div>
   <p class="note">Por asesor se cuenta con el asesor actual (después de reasignar). <b>↔ Quitadas</b> = cuentas que se le reasignaron a otro.</p>
-  <p class="note"><b>Perfil</b> = rechazado por gerente/asesor (no cumplía el perfil: ¿por qué se consultó?). <b>Venc.</b> = fecha compromiso ya pasada. ${T.sinMesa?`<b>${T.sinMesa}</b> rechazos sin llegar a mesa.`:''}${T.desPC?` <b>${T.desPC}</b> desembolsos por confirmar en sistema.`:''}${T.conf?` <b style="color:var(--bad)">${T.conf}</b> cuentas rechazadas que el sistema marca desembolsadas.`:''}${T.sc?` <b>${T.sc}</b> rechazos históricos sin motivo especificado.`:''}</p></div>
+  <p class="note"><b>Perfil</b> = rechazado por gerente/asesor (no cumplía el perfil: ¿para qué se pidió el approval?). <b>Venc.</b> = fecha compromiso ya pasada. ${T.sinMesa?`<b>${T.sinMesa}</b> rechazos sin llegar a mesa.`:''}${T.desPC?` <b>${T.desPC}</b> desembolsos por confirmar en sistema.`:''}${T.conf?` <b style="color:var(--bad)">${T.conf}</b> cuentas rechazadas que el sistema marca desembolsadas.`:''}${T.sc?` <b>${T.sc}</b> rechazos históricos sin motivo especificado.`:''}</p></div>
   <div class="panel"><h3>Por segmento</h3><div class="tw"><table><tr><th></th><th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Perfil</th><th>Abiertos</th></tr>${segRows}</table></div></div>
   <div class="panel"><h3>Motivos de rechazo</h3>${motA.length?`<div class="bars">${motA.slice(0,12).map(([k,n])=>`<div class="b"><span class="l" title="${esc(k)}">${esc(k)}</span><span class="t"><i style="width:${n*100/motMax}%;background:${/\(/.test(k)?'#94a3b8':'#d97706'}"></i></span><span class="n">${n}</span></div>`).join('')}</div><p class="note">Naranja = perfil (gerente/asesor) · Gris = mesa / cliente / otro</p>`:'<p class="note">Aún no hay rechazos capturados.</p>'}</div>
   <div class="panel"><details ${VISTA!=='GP'?'open':''}><summary>Por asesor (${ases.length})</summary><div class="tw" style="margin-top:8px"><table>

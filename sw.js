@@ -12,14 +12,14 @@
 //
 // IMPORTANTE: subir CACHE_VERSION cada vez que se publique un cambio grande,
 // para que los cachés viejos se limpien solos en el siguiente open.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `seguimiento-aceptados-${CACHE_VERSION}`;
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192.png?v=2',
-  './icons/icon-512.png?v=2',
+  './icons/icon-192.png?v=3',
+  './icons/icon-512.png?v=3',
 ];
 
 self.addEventListener('install', (event) => {
