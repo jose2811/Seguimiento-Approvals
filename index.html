@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Seguimiento a Aceptados</title>
+<title>Approvals</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f3d6e">
 <link rel="icon" href="icons/favicon-32.png?v=4">
@@ -127,7 +127,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Seguimiento a Aceptados<small>v0.4.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.4.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar export</button>
@@ -161,7 +161,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.4.3', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.4.4', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -403,7 +403,7 @@ function logout(silencioso){
   showLogin();
 }
 function showLogin(msg){
-  openSheet(`<div class="shead"><h3>Seguimiento a Aceptados</h3></div>
+  openSheet(`<div class="shead"><h3>Approvals</h3></div>
   <p class="note">Entra con tu usuario (tu sucursal, por ejemplo <b>zapopan</b>) y tu contraseña.</p>
   <form class="form on" id="lg" autocomplete="on">
     <label>Usuario</label><input id="lg_u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="zapopan">

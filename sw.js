@@ -1,4 +1,4 @@
-// Service worker de Seguimiento a Aceptados.
+// Service worker de Approvals.
 //
 // Estrategia: RED PRIMERO, caché como respaldo — nunca al revés.
 // - Si hay internet en el momento de abrir la app, siempre se va a buscar la
@@ -12,7 +12,7 @@
 //
 // IMPORTANTE: subir CACHE_VERSION cada vez que se publique un cambio grande,
 // para que los cachés viejos se limpien solos en el siguiente open.
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `seguimiento-aceptados-${CACHE_VERSION}`;
 const CORE_ASSETS = [
   './',

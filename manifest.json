@@ -1,6 +1,6 @@
 {
-  "name": "Seguimiento a Aceptados",
-  "short_name": "Aceptados",
+  "name": "Approvals",
+  "short_name": "Approvals",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#040404",
