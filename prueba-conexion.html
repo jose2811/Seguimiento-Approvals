@@ -53,7 +53,7 @@ async function run(){
 }
 // Permite pasar el proyecto en la liga: ?u=https://xxxx.supabase.co&k=ANON_KEY
 const qs=new URLSearchParams(location.search);
-const PRE_U='',PRE_K='';
+const PRE_U='https://zvnrtsowckhkfvrjzfcf.supabase.co',PRE_K='';
 const U0=qs.get('u')||PRE_U,K0=qs.get('k')||PRE_K;
 if(U0){document.getElementById('u').value=U0;document.getElementById('k').value=K0;document.getElementById('det').open=true;}
 document.getElementById('go').onclick=run;run();
