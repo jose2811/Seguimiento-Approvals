@@ -13,6 +13,7 @@ header{background:var(--pri);color:#fff;padding:10px 12px 0;position:sticky;top:
 .hrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .htitle{font-weight:700;font-size:16px;flex:1;min-width:150px}
 .htitle small{font-weight:400;opacity:.7;font-size:11px;margin-left:4px}
+.hbtn.warn{background:#f59e0b;border-color:#f59e0b;color:#111}
 .hbtn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 10px;cursor:pointer}
 .hsel{background:#fff;color:var(--ink);border:0;border-radius:8px;padding:6px 8px;max-width:180px}
 .tabs{display:flex;gap:4px;margin-top:8px}
@@ -122,9 +123,10 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Seguimiento a Aceptados<small>v0.3.1</small></div>
-    <select id="vista" class="hsel" title="Vista"></select>
-    <button class="hbtn" id="bImport">📥 Cargar export</button>
+    <div class="htitle">Seguimiento a Aceptados<small>v0.4.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <select id="vista" class="hsel" title="Vista" hidden></select>
+    <button class="hbtn" id="bSync" hidden>☁</button>
+    <button class="hbtn" id="bImport" hidden>📥 Cargar export</button>
     <button class="hbtn" id="bMenu">⋯</button>
   </div>
   <div class="tabs">
@@ -133,17 +135,17 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
   </div>
   <div class="menu" id="menu">
     <button id="mExp">💾 Descargar respaldo (JSON)</button>
-    <button id="mImp">📂 Restaurar respaldo (JSON)</button>
-    <button id="mIni">📅 Inicio del seguimiento</button>
-    <button id="mHist">🧾 Historial de cargas</button>
-    <button id="mBorrar" style="color:#b91c1c">🗑 Borrar todos los datos</button>
+    <button id="mSync">🔄 Sincronizar ahora</button>
+    <button id="mImp" hidden>📂 Restaurar respaldo (JSON)</button>
+    <button id="mIni" hidden>📅 Inicio del seguimiento</button>
+    <button id="mHist" hidden>🧾 Historial de cargas</button>
+    <button id="mBorrar" style="color:#b91c1c">🚪 Cerrar sesión</button>
   </div>
 </header>
 <input type="file" id="fx" accept=".xlsx" hidden>
 <input type="file" id="fj" accept=".json,application/json" hidden>
 
 <main>
-  <div class="proto" id="proto">Prototipo: el selector de arriba simula el login. En la versión final cada gerente solo verá su sucursal.</div>
   <section id="vLista"></section>
   <section id="vConc" hidden></section>
 </main>
@@ -155,7 +157,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.3.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.4.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -295,8 +297,146 @@ function blank(){return {v:1,cfg:{abr:1},cuentas:{},ev:{},imports:[]};}
 function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);if(d&&d.cuentas){d.cfg=d.cfg||{};if(!d.cfg.abr){Object.values(d.cuentas).forEach(c=>c.nombre=abrevia(c.nombre));d.cfg.abr=1;try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}}return d;}}}catch(e){}return blank();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){toast('⚠ No se pudo guardar en este navegador');}}
 let VISTA=(()=>{try{return localStorage.getItem(KEYV)||'GP';}catch(e){return 'GP';}})();
-const quien=()=>VISTA==='GP'?'GP':VISTA;
-function addEv(id,e){e.ts=new Date().toISOString();e.f=HOY;e.por=e.por||quien();(DB.ev[id]=DB.ev[id]||[]).push(e);save();}
+/* ================= Sincronización (Supabase) ================= */
+const SB={url:'https://zvnrtsowckhkfvrjzfcf.supabase.co',key:'sb_publishable_rJ3_KseJ-OOxpivQVGCtDw_dvt6aPi2',dom:'@aceptados.app'};
+const KEYS='segAceptados_sesion',KEYQ='segAceptados_pend',KEYD='segAceptados_dirty';
+const lsGet=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
+const lsSet=(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
+let SES=lsGet(KEYS),PEND=lsGet(KEYQ)||[],DIRTY=new Set(lsGet(KEYD)||[]),CFG_DIRTY=false;
+const PERFIL=()=>SES&&SES.perfil;
+const ES_GP=()=>!!(PERFIL()&&PERFIL().es_gp);
+let UIDS=new Set();function reindex(){UIDS=new Set();for(const id in DB.ev)for(const e of DB.ev[id])if(e.uid)UIDS.add(e.uid);}
+function persistQ(){lsSet(KEYQ,PEND);lsSet(KEYD,[...DIRTY]);}
+const rid=()=>Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+let SYNC={estado:'',msg:'',ultima:''};
+function setEstado(estado,msg){SYNC.estado=estado;SYNC.msg=msg||'';if(estado==='ok')SYNC.ultima=new Date();pintaSync();}
+function pintaSync(){const b=$('#bSync');if(!b)return;const n=PEND.length+(DIRTY.size?1:0);
+  if(!SES){b.hidden=true;return;}b.hidden=false;
+  if(SYNC.estado==='run'){b.textContent='⟳ Sincronizando…';b.className='hbtn';}
+  else if(SYNC.estado==='err'){b.textContent='⚠ Sin conexión'+(n?' · '+PEND.length+' pend.':'');b.className='hbtn warn';b.title=SYNC.msg;}
+  else if(n){b.textContent='⏳ '+PEND.length+' por subir';b.className='hbtn warn';}
+  else b.textContent='☁ '+(SYNC.ultima?String(SYNC.ultima.getHours()).padStart(2,'0')+':'+String(SYNC.ultima.getMinutes()).padStart(2,'0'):'—'),b.className='hbtn';}
+async function sbAuth(body,grant){
+  const r=await fetch(SB.url+'/auth/v1/token?grant_type='+grant,{method:'POST',headers:{apikey:SB.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(/invalid/i.test(j.error_description||j.msg||j.error||'')?'Usuario o contraseña incorrectos':(j.error_description||j.msg||'Error al entrar ('+r.status+')'));
+  return j;
+}
+function setSes(j,perfil){SES={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:j.expires_at||Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:(j.user&&j.user.id)||SES&&SES.uid,perfil:perfil||(SES&&SES.perfil)};lsSet(KEYS,SES);}
+async function token(force){
+  if(!SES)throw new Error('Sin sesión');
+  if(force||Date.now()/1000>SES.expires_at-90){
+    try{setSes(await sbAuth({refresh_token:SES.refresh_token},'refresh_token'));}
+    catch(e){if(/incorrect|invalid|refresh/i.test(e.message)){logout(true);}throw e;}
+  }
+  return SES.access_token;
+}
+async function rest(path,opt={},retry=true){
+  const h={apikey:SB.key,Authorization:'Bearer '+await token()};
+  if(opt.body)h['Content-Type']='application/json';if(opt.prefer)h.Prefer=opt.prefer;
+  const r=await fetch(SB.url+'/rest/v1/'+path,{method:opt.method||'GET',headers:h,body:opt.body?JSON.stringify(opt.body):undefined});
+  if(r.status===401&&retry){await token(true);return rest(path,opt,false);}
+  const tx=await r.text();
+  if(!r.ok){const e=new Error('HTTP '+r.status+': '+tx.slice(0,160));e.status=r.status;throw e;}
+  return tx?JSON.parse(tx):null;
+}
+async function getAll(tabla,filtro,orden){
+  const out=[];for(let off=0;;off+=1000){const p=await rest(`${tabla}?select=*${filtro}&order=${orden}&limit=1000&offset=${off}`);out.push(...p);if(p.length<1000)break;}return out;
+}
+function applyEvRow(row){if(UIDS.has(row.uid))return;const e={...row.data,uid:row.uid};(DB.ev[row.cuenta_id]=DB.ev[row.cuenta_id]||[]).push(e);UIDS.add(row.uid);}
+async function pull(full){
+  DB.sync=DB.sync||{};const s=DB.sync;
+  const over=t=>new Date(Date.parse(t)-120000).toISOString();
+  if(full||!s.c){DB.cuentas={};DB.ev={};UIDS=new Set();s.c='';s.e='';}
+  const cs=await getAll('cuentas',s.c?'&actualizado=gt.'+encodeURIComponent(over(s.c)):'','actualizado.asc,id.asc');
+  for(const r of cs){if(!DIRTY.has(r.id))DB.cuentas[r.id]=r.data;if(!s.c||r.actualizado>s.c)s.c=r.actualizado;}
+  const es=await getAll('eventos',s.e?'&creado=gt.'+encodeURIComponent(over(s.e)):'','creado.asc,uid.asc');
+  for(const r of es){applyEvRow(r);if(!s.e||r.creado>s.e)s.e=r.creado;}
+  for(const p of PEND)if(!UIDS.has(p.uid)){(DB.ev[p.id]=DB.ev[p.id]||[]).push(p.e);UIDS.add(p.uid);}
+  const cfg=await rest('config?select=*');const ini=(cfg||[]).find(x=>x.k==='inicio');if(ini&&!CFG_DIRTY)DB.cfg.inicio=ini.v||'';
+  save();
+}
+async function enviar(tabla,rows,prefer){
+  for(let i=0;i<rows.length;i+=400){
+    const ch=rows.slice(i,i+400);
+    try{await rest(tabla,{method:'POST',body:ch,prefer});}
+    catch(e){if(!e.status||e.status>=500||e.status===401)throw e; // red / servidor: reintentar después
+      for(const one of ch){try{await rest(tabla,{method:'POST',body:[one],prefer});}catch(e2){if(!e2.status||e2.status>=500)throw e2;console.warn('Descartado',tabla,one,e2.message);}}
+    }
+  }
+}
+let FLUSHING=null;
+async function flush(){
+  if(!SES)return;if(FLUSHING)return FLUSHING;
+  const pr=(async()=>{await null;try{
+    setEstado('run');
+    if(DIRTY.size&&ES_GP()){
+      const ids=[...DIRTY].filter(id=>DB.cuentas[id]);
+      await enviar('cuentas?on_conflict=id',ids.map(id=>({id,sucursal:DB.cuentas[id].suc||'SIN SUCURSAL',data:DB.cuentas[id]})),'resolution=merge-duplicates,return=minimal');
+      ids.forEach(id=>DIRTY.delete(id));persistQ();
+    }
+    if(CFG_DIRTY&&ES_GP()){await rest('config?on_conflict=k',{method:'POST',body:[{k:'inicio',v:DB.cfg.inicio||''}],prefer:'resolution=merge-duplicates,return=minimal'});CFG_DIRTY=false;}
+    if(PEND.length){
+      const lote=PEND.slice();
+      await enviar('eventos?on_conflict=uid',lote.map(p=>({uid:p.uid,cuenta_id:p.id,data:p.e})),'resolution=ignore-duplicates,return=minimal');
+      const sent=new Set(lote.map(p=>p.uid));PEND=PEND.filter(p=>!sent.has(p.uid));persistQ();
+    }
+    setEstado('ok');
+  }catch(e){setEstado('err',e.message);}finally{if(FLUSHING===pr)FLUSHING=null;}})();
+  FLUSHING=pr;return pr;
+}
+async function sincroniza(full){
+  if(!SES)return;
+  await flush();if(SYNC.estado==='err')return;
+  try{setEstado('run');await pull(full);setEstado(PEND.length?'':'ok');fillVista();render();}catch(e){setEstado('err',e.message);}
+}
+function queueEv(id,e){(DB.ev[id]=DB.ev[id]||[]).push(e);UIDS.add(e.uid);PEND.push({uid:e.uid,id,e});persistQ();}
+/* Evento del sistema con uid determinístico: si ya existe (en esta compu o en el servidor) no se duplica */
+function sysEv(id,e,uid){if(UIDS.has(uid))return false;e.uid=uid;queueEv(id,e);return true;}
+function logout(silencioso){
+  if(!silencioso&&PEND.length&&!confirm('Tienes '+PEND.length+' movimientos sin subir. Si sales se pierden. ¿Salir de todos modos?'))return;
+  SES=null;PEND=[];DIRTY=new Set();lsSet(KEYS,null);persistQ();DB=blank();save();UIDS=new Set();
+  showLogin();
+}
+function showLogin(msg){
+  openSheet(`<div class="shead"><h3>Seguimiento a Aceptados</h3></div>
+  <p class="note">Entra con tu usuario (tu sucursal, por ejemplo <b>zapopan</b>) y tu contraseña.</p>
+  <form class="form on" id="lg" autocomplete="on">
+    <label>Usuario</label><input id="lg_u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="zapopan">
+    <label>Contraseña</label><input id="lg_p" name="password" type="password" autocomplete="current-password">
+    <div class="err" id="lg_err">${esc(msg||'')}</div>
+    <div class="row"><button class="btn" id="lg_ok" type="submit">Entrar</button></div>
+  </form>`,true);
+  $('#lg').onsubmit=async ev=>{ev.preventDefault();
+    const u=$('#lg_u').value.trim().toLowerCase().replace(/\s+/g,''),p=$('#lg_p').value;
+    if(!u||!p)return $('#lg_err').textContent='Escribe usuario y contraseña';
+    $('#lg_ok').disabled=true;$('#lg_err').textContent='Entrando…';
+    try{
+      const j=await sbAuth({email:u.includes('@')?u:u+SB.dom,password:p},'password');
+      setSes(j,null);
+      const pf=await rest('perfiles?select=*&user_id=eq.'+SES.uid);
+      if(!pf||!pf.length){SES=null;lsSet(KEYS,null);throw new Error('Tu usuario no tiene sucursal asignada. Avísale a José.');}
+      setSes(j,pf[0]);
+      if(DB.owner!==SES.uid){DB=blank();DB.owner=SES.uid;PEND=[];DIRTY=new Set();persistQ();UIDS=new Set();}
+      aplicaPerfil();closeSheet(true);$('#vLista').innerHTML='<div class="empty">Cargando datos…</div>';
+      await sincroniza(true);
+    }catch(e){$('#lg_err').textContent=e.message;$('#lg_ok').disabled=false;}
+  };
+}
+function aplicaPerfil(){
+  const gp=ES_GP();
+  if(!gp&&PERFIL()){VISTA=PERFIL().sucursal;}
+  $('#vista').hidden=!gp;$('#bImport').hidden=!gp;
+  ['mImp','mIni','mHist'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
+  $('#who').textContent=PERFIL()?PERFIL().nombre:'';
+  pintaSync();
+}
+setInterval(()=>{if(SES&&document.visibilityState==='visible')sincroniza(false);},120000);
+document.addEventListener('visibilitychange',()=>{if(SES&&document.visibilityState==='visible')sincroniza(false);});
+window.addEventListener('online',()=>{if(SES)sincroniza(false);});
+
+const quien=()=>PERFIL()?PERFIL().nombre:(VISTA==='GP'?'GP':VISTA);
+function addEv(id,e){e.ts=new Date().toISOString();e.f=HOY;e.por=e.por||quien();e.uid=rid();queueEv(id,e);save();flush();}
 
 function blankR(){return {filas:0,acept:0,nuevos:0,act:0,des:0,mesa:0,ignored:0,viejas:0,hist:0,histYa:0};}
 function mkMap(header){
@@ -333,18 +473,19 @@ function importSheet(header,rows,archivo,r){
     if(!c){
       if(!control&&ini&&fsol&&fsol<ini){r.viejas++;continue;}
       r.acept++;
-      nuevo.alta=HOY;c=DB.cuentas[id]=nuevo;r.nuevos++;
-      (DB.ev[id]=DB.ev[id]||[]).push({t:'alta',ts:(fsol||HOY)+'T12:00:00.000Z',f:fsol||HOY,por:'Sistema',seg:nuevo.seg,est});
+      nuevo.alta=HOY;c=DB.cuentas[id]=nuevo;r.nuevos++;DIRTY.add(id);
+      sysEv(id,{t:'alta',ts:(fsol||HOY)+'T12:00:00.000Z',f:fsol||HOY,por:'Sistema',seg:nuevo.seg,est},'alta:'+id);
       if(/DESEMBOLSADO/i.test(est))r.des++;
     }else{
-      r.acept++;
+      r.acept++;const antes=JSON.stringify(c);
       if(control){ // el control no conoce el estatus actual del sistema: no lo toca
         for(const k of ['nombre','tipo','aval','refs','fsol','sem','suc','asesor'])if(!c[k]&&nuevo[k])c[k]=nuevo[k];
       }else{
         if(/DESEMBOLSADO/i.test(c.est)&&!/DESEMBOLSADO/i.test(est)){nuevo.est=c.est;nuevo.fdes=c.fdes;}
-        else if(c.est!==est){(DB.ev[id]=DB.ev[id]||[]).push({t:'sis',ts,f:HOY,por:'Sistema',de:c.est,est,fdes:nuevo.fdes});r.act++;if(/DESEMBOLSADO/i.test(est))r.des++;if(/MESA/i.test(est))r.mesa++;}
-        for(const k in nuevo){if(k==='seg'&&c.seg)continue;if(nuevo[k]!==''&&nuevo[k]!=null)c[k]=nuevo[k];}
+        else if(c.est!==est){sysEv(id,{t:'sis',ts,f:HOY,por:'Sistema',de:c.est,est,fdes:nuevo.fdes},'sis:'+id+':'+norm(est));r.act++;if(/DESEMBOLSADO/i.test(est))r.des++;if(/MESA/i.test(est))r.mesa++;}
+        for(const k in nuevo){if(k==='seg'&&c.seg)continue;if(k==='alta')continue;if(nuevo[k]!==''&&nuevo[k]!=null)c[k]=nuevo[k];}
       }
+      if(JSON.stringify(c)!==antes)DIRTY.add(id);
     }
     if(control){
       if(c.hist){r.histYa++;continue;}
@@ -357,8 +498,8 @@ function importSheet(header,rows,archivo,r){
       else if(ETAPA_XL[et]){e.t='etapa';e.etapa=ETAPA_XL[et];const fc=toISODate(g('xfcm'),yr);if(fc)e.fprog=fc;}
       else if(com||monto||mesaX){e.t='com';if(!e.com)e.com='(sin comentario)';}
       else e.t=null;
-      if(e.t){DB.ev[id].push(e);r.hist++;}
-      c.hist=true;
+      if(e.t&&sysEv(id,e,'hist:'+id))r.hist++;
+      c.hist=true;DIRTY.add(id);
     }
   }
   return control;
@@ -367,9 +508,9 @@ function importFile(sheets,archivo){
   const r=blankR();let control=false;
   if(!DB.cfg)DB.cfg={};
   for(const sh of sheets){if(importSheet(sh.header,sh.rows,archivo,r))control=true;}
-  if(control&&!DB.cfg.inicio){const fs=Object.values(DB.cuentas).map(c=>c.fsol).filter(Boolean).sort();if(fs[0])DB.cfg.inicio=fs[0];}
+  if(control&&!DB.cfg.inicio){const fs=Object.values(DB.cuentas).map(c=>c.fsol).filter(Boolean).sort();if(fs[0]){DB.cfg.inicio=fs[0];CFG_DIRTY=true;}}
   r.control=control;r.hojas=sheets.length;
-  DB.imports.push({ts:new Date().toISOString(),archivo,...r});save();return r;
+  DB.imports.push({ts:new Date().toISOString(),archivo,...r});persistQ();save();return r;
 }
 
 /* Estado derivado de una cuenta: siempre se calcula a partir del historial, nunca se sobrescribe */
@@ -412,9 +553,15 @@ $('#bImport').onclick=()=>$('#fx').click();
 $('#fx').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
   try{
-    toast('Leyendo '+f.name+'…',10000);
+    if(!ES_GP())throw new Error('Solo el GP carga archivos');
+    toast('Actualizando desde la nube…',20000);
+    await sincroniza(false);if(SYNC.estado==='err')throw new Error('Sin conexión: no se puede cargar ahora ('+SYNC.msg+')');
+    toast('Leyendo '+f.name+'…',20000);
     const sheets=await readXlsx(await f.arrayBuffer());
     const r=importFile(sheets,f.name);fillVista();render();
+    toast('Subiendo a la nube…',20000);await flush();
+    if(SYNC.estado==='err')throw new Error('Se cargó en esta compu pero no se pudo subir. Se reintenta solo. ('+SYNC.msg+')');
+    try{await rest('cargas',{method:'POST',body:[{archivo:f.name,resumen:r}],prefer:'return=minimal'});}catch(_){}
     toast(r.control
       ?`✔ Control cargado: ${f.name}\n${r.acept} cuentas (${r.nuevos} nuevas) · ${r.hist} registros históricos${r.histYa?'\n'+r.histYa+' ya estaban cargadas (no se duplican)':''}\nInicio del seguimiento: ${fmt(DB.cfg.inicio)}\n🔒 Columnas de RFC, teléfono, domicilio y buró descartadas`
       :`✔ ${f.name}\n${r.filas} filas · ${r.acept} aceptados en seguimiento\nNuevos: ${r.nuevos} · Cambios de estatus: ${r.act} (desembolsados ${r.des})${r.viejas?'\n'+r.viejas+' aceptados anteriores al '+fmt(DB.cfg.inicio,false)+' ignorados':''}\n🔒 ${r.ignored} columnas descartadas (RFC, teléfono, domicilio, buró)`,8000);
@@ -429,21 +576,26 @@ $('#fj').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const d=JSON.parse(await f.text());if(!d.cuentas||!d.ev)throw new Error('Respaldo no válido');
     if(!confirm('¿Reemplazar los datos actuales con el respaldo de '+(d.exportado||'').slice(0,10)+'?'))return;
-    DB={v:1,cfg:d.cfg||{},cuentas:d.cuentas,ev:d.ev,imports:d.imports||[]};if(!DB.cfg.abr){Object.values(DB.cuentas).forEach(c=>c.nombre=abrevia(c.nombre));DB.cfg.abr=1;}save();fillVista();render();toast('✔ Respaldo restaurado');
+    const own=DB.owner,sync=DB.sync;DB={v:1,cfg:d.cfg||{},cuentas:d.cuentas,ev:d.ev,imports:d.imports||[],owner:own,sync};if(!DB.cfg.abr){Object.values(DB.cuentas).forEach(c=>c.nombre=abrevia(c.nombre));DB.cfg.abr=1;}
+    Object.keys(DB.cuentas).forEach(id=>DIRTY.add(id));
+    for(const id in DB.ev)DB.ev[id].forEach((e,i)=>{if(!e.uid)e.uid='rs:'+id+':'+e.t+':'+e.ts+':'+i;if(!PEND.some(p=>p.uid===e.uid))PEND.push({uid:e.uid,id,e});});
+    reindex();CFG_DIRTY=true;persistQ();save();fillVista();render();toast('✔ Respaldo restaurado. Subiendo…');flush();
   }catch(err){toast('⚠ '+err.message);}
 };
 $('#mIni').onclick=()=>{
   openSheet(`<div class="shead"><h3>Inicio del seguimiento</h3><button class="x" data-close>×</button></div>
   <p class="note">Al cargar el funnel solo entran aceptados con fecha de solicitud desde este día. Lo anterior se ignora. Se fija sola al cargar tu control.</p>
   <div class="form on"><label>Fecha de inicio</label><input type="date" id="i_f" value="${DB.cfg.inicio||''}"><div class="row"><button class="btn" id="i_ok">Guardar</button></div></div>`);
-  $('#i_ok').onclick=()=>{DB.cfg.inicio=$('#i_f').value;save();closeSheet();toast('Inicio: '+(DB.cfg.inicio?fmt(DB.cfg.inicio):'sin filtro'));};
+  $('#i_ok').onclick=()=>{DB.cfg.inicio=$('#i_f').value;CFG_DIRTY=true;save();flush();closeSheet();toast('Inicio: '+(DB.cfg.inicio?fmt(DB.cfg.inicio):'sin filtro'));};
 };
 $('#mHist').onclick=()=>{
   const h=[...DB.imports].reverse();
   openSheet(`<div class="shead"><h3>Historial de cargas</h3><button class="x" data-close>×</button></div>
   ${h.length?`<div class="tw"><table><tr><th>Fecha</th><th>Archivo</th><th>Aceptados</th><th>Nuevos</th><th>Cambios</th></tr>${h.map(i=>`<tr><td>${fmtTs(i.ts)}</td><td>${esc(i.archivo)}</td><td>${i.acept}</td><td>${i.nuevos}</td><td>${i.act}</td></tr>`).join('')}</table></div>`:'<p class="note">Aún no hay cargas.</p>'}`);
 };
-$('#mBorrar').onclick=()=>{if(confirm('¿Borrar TODOS los datos de este navegador? Descarga un respaldo antes.')){DB=blank();save();fillVista();render();}};
+$('#mBorrar').onclick=()=>logout();
+$('#mSync').onclick=()=>sincroniza(false);
+$('#bSync').onclick=()=>sincroniza(false);
 
 /* ================= Lista ================= */
 const F={q:'f_abiertos',suc:'',asesor:'',seg:'',txt:''};
@@ -461,6 +613,7 @@ const FILTROS=[
 function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vConc').hidden=TAB!=='conc';TAB==='lista'?renderLista():renderConc();}
 function renderLista(){
   const all=visibles();
+  if(!all.length&&!ES_GP()){$('#vLista').innerHTML=`<div class="empty"><b>Sin cuentas por ahora</b><br>Aquí aparecen los aceptados de tu sucursal en cuanto José carga el funnel.</div>`;return;}
   if(!all.length){$('#vLista').innerHTML=`<div class="empty"><b>Sin datos todavía</b><br><b>1.</b> Carga tu control (Detalle Region approvals) para arrancar la base.<br><b>2.</b> Después carga cada día el export del funnel tal cual sale.<br>Solo se guardan los aceptados y las columnas de seguimiento.<br><button class="btn" onclick="document.getElementById('fx').click()">📥 Cargar export</button></div>`;return;}
   const ab=all.filter(s=>s.abierto);
   const k={ab:ab.length,a30:ab.filter(s=>s.dias>30).length,venc:ab.filter(s=>s.venc).length,rep:ab.filter(s=>s.repros>=2).length};
@@ -525,8 +678,9 @@ function card(s){
 
 /* ================= Detalle ================= */
 let CUR=null;
-function openSheet(html){$('#sheet').innerHTML=html;$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeSheet);}
-function closeSheet(){$('#ov').classList.remove('on');CUR=null;}
+let LOCK=false;
+function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
+function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;}
 $('#ov').onclick=e=>{if(e.target.id==='ov')closeSheet();};
 function evTxt(e){
   switch(e.t){
@@ -723,7 +877,8 @@ function renderConc(){
   $('#cSem').onchange=e=>{C.sem=e.target.value;renderConc();};
 }
 
-fillVista();render();
+reindex();fillVista();
+if(SES&&SES.perfil){aplicaPerfil();render();sincroniza(false);}else{render();showLogin();}
 </script>
 </body>
 </html>
