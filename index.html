@@ -129,7 +129,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.6.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.6.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -145,6 +145,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
     <button id="mExp">💾 Descargar respaldo (JSON)</button>
     <button id="mSync">🔄 Sincronizar ahora</button>
     <button id="mImp" hidden>📂 Restaurar respaldo (JSON)</button>
+    <button id="mAdd" hidden>➕ Agregar approval por ID</button>
     <button id="mIni" hidden>📅 Inicio del seguimiento</button>
     <button id="mHist" hidden>🧾 Historial de cargas</button>
     <button id="mBorrar" style="color:#b91c1c">🚪 Cerrar sesión</button>
@@ -165,7 +166,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.6.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.6.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -363,6 +364,7 @@ async function pull(full){
   for(const p of PEND)if(!UIDS.has(p.uid)){(DB.ev[p.id]=DB.ev[p.id]||[]).push(p.e);UIDS.add(p.uid);}
   const cfg=await rest('config?select=*');const ini=(cfg||[]).find(x=>x.k==='inicio');if(ini&&!CFG_DIRTY)DB.cfg.inicio=ini.v||'';
   const bn=(cfg||[]).find(x=>x.k==='bench');if(bn&&!CFG_DIRTY)DB.cfg.bench=bn.v;
+  const fz=(cfg||[]).find(x=>x.k==='forzar');if(fz&&!CFG_DIRTY)DB.cfg.forzar=fz.v||[];
   save();
 }
 async function enviar(tabla,rows,prefer){
@@ -384,7 +386,7 @@ async function flush(){
       await enviar('cuentas?on_conflict=id',ids.map(id=>({id,sucursal:DB.cuentas[id].suc||'SIN SUCURSAL',data:DB.cuentas[id]})),'resolution=merge-duplicates,return=minimal');
       ids.forEach(id=>DIRTY.delete(id));persistQ();
     }
-    if(CFG_DIRTY&&ES_GP()){const body=[{k:'inicio',v:DB.cfg.inicio||''}];if(DB.cfg.bench)body.push({k:'bench',v:DB.cfg.bench});
+    if(CFG_DIRTY&&ES_GP()){const body=[{k:'inicio',v:DB.cfg.inicio||''}];if(DB.cfg.bench)body.push({k:'bench',v:DB.cfg.bench});body.push({k:'forzar',v:DB.cfg.forzar||[]});
       await rest('config?on_conflict=k',{method:'POST',body,prefer:'resolution=merge-duplicates,return=minimal'});CFG_DIRTY=false;}
     if(PEND.length){
       const lote=PEND.slice();
@@ -437,7 +439,7 @@ function aplicaPerfil(){
   const gp=ES_GP();
   if(!gp&&PERFIL()){VISTA=PERFIL().sucursal;}
   $('#vista').hidden=!gp;$('#bImport').hidden=!gp;
-  ['mImp','mIni','mHist','mVer'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
+  ['mImp','mIni','mHist','mVer','mAdd'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
   $('#who').textContent=PERFIL()?PERFIL().nombre:'';
   pintaSync();
 }
@@ -456,6 +458,7 @@ function mkMap(header){
   return map;
 }
 /* Importa una hoja. Si trae columna "Etapa" se trata como el CONTROL histórico (Excel de seguimiento). */
+let VIEJAS=lsGet('segAceptados_viejas')||{};
 function importSheet(header,rows,archivo,r){
   const map=mkMap(header);
   for(const k of ['id','suc']) if(map[k]==null) throw new Error('Falta la columna "'+k+'" en el archivo');
@@ -463,6 +466,7 @@ function importSheet(header,rows,archivo,r){
   const control=map.etapa!=null;
   const kept=Object.values(map);r.ignored=Math.max(r.ignored,header.filter((h,i)=>h!=null&&h!==''&&!kept.includes(i)).length);
   const ts=new Date().toISOString();const ini=DB.cfg.inicio||'';
+  const forz=new Set(DB.cfg.forzar||[]),forz0=forz.size;if(!control)VIEJAS={};
   // en el control, si un ID se repite se queda la última fila
   const pick=new Map();
   for(const row of rows){
@@ -474,14 +478,15 @@ function importSheet(header,rows,archivo,r){
     const g=k=>map[k]==null?'':row[map[k]];r.filas++;
     const seg=String(g('seg')||''),est=String(g('est')||'');
     const esAcept=/ACEPTADO/i.test(seg)||(!seg&&/ACEPTADO|MESA/i.test(est))||control;
-    if(!esAcept&&!DB.cuentas[id])continue;
+    if(!esAcept&&!DB.cuentas[id]){if(forz.has(id)){(r.forzNo=r.forzNo||[]).push(id+' ('+(est||seg).replace(/^\S+\)\s*/,'')+')');forz.delete(id);}continue;}
     const fsol=toISODate(g('fsol'));const yr=fsol?+fsol.slice(0,4):undefined;
     const nuevo={id,nombre:abrevia(g('nombre')),tipo:String(g('tipo')||''),seg:/ACEPTADO/i.test(seg)?seg:(/ACEPTADO/i.test(est)?est:seg||est),est,aval:siNo(g('aval')),refs:siNo(g('refs')),
       fsol,sem:String(g('sem')||''),fdes:toISODate(g('fdes')),suc:String(g('suc')||'').trim(),
       safi:g('safi')?String(Math.round(+g('safi'))||g('safi')):'',asesor:String(g('asesor')||'').trim()};
     let c=DB.cuentas[id];
     if(!c){
-      if(!control&&ini&&fsol&&fsol<ini){r.viejas++;continue;}
+      if(!control&&ini&&fsol&&fsol<ini&&!forz.has(id)){r.viejas++;VIEJAS[id]=nuevo;continue;}
+      if(forz.has(id)){nuevo.forzado=1;forz.delete(id);r.forz=(r.forz||0)+1;}
       r.acept++;
       nuevo.alta=HOY;c=DB.cuentas[id]=nuevo;r.nuevos++;DIRTY.add(id);
       sysEv(id,{t:'alta',ts:(fsol||HOY)+'T12:00:00.000Z',f:fsol||HOY,por:'Sistema',seg:nuevo.seg,est},'alta:'+id);
@@ -512,7 +517,20 @@ function importSheet(header,rows,archivo,r){
       c.hist=true;DIRTY.add(id);
     }
   }
+  if(forz.size!==forz0){DB.cfg.forzar=[...forz];CFG_DIRTY=true;}
+  if(!control)lsSet('segAceptados_viejas',VIEJAS);
   return control;
+}
+function agregaPorId(id){
+  id=String(id||'').trim();if(!/^\d+$/.test(id))return {m:'El SolicitudID debe ser solo números',ok:false};
+  if(DB.cuentas[id])return {m:'Ese approval ya está en la app ('+DB.cuentas[id].suc.replace('CI-','')+')',ok:false};
+  const v=VIEJAS[id];
+  if(v){const n={...v,alta:HOY,forzado:1};DB.cuentas[id]=n;DIRTY.add(id);
+    sysEv(id,{t:'alta',ts:(n.fsol||HOY)+'T12:00:00.000Z',f:n.fsol||HOY,por:'Sistema',seg:n.seg,est:n.est},'alta:'+id);
+    addEv(id,{t:'com',com:'➕ Agregado por ID (consultado antes del inicio del seguimiento)'});fillVista();render();
+    return {m:'✔ Agregado: '+n.nombre+' · '+n.suc.replace('CI-','')+' · '+n.asesor,ok:true};}
+  DB.cfg.forzar=[...new Set([...(DB.cfg.forzar||[]),id])];CFG_DIRTY=true;save();flush();
+  return {m:'No viene en el último funnel cargado. Queda en espera: se agrega solo en la próxima carga del funnel.',ok:true};
 }
 /* ================= Archivos complementarios: datos duros del sistema ================= */
 const LLEN={a:'No inició',b:'Inició, no terminó',c:'Terminó, no llegó a mesa',d:'En mesa',e:'Desembolsado'};
@@ -712,7 +730,7 @@ $('#fx').onchange=async e=>{
       let r;
       if(it.t==='control'||it.t==='funnel'){r=importFile(it.sheets,it.f.name);
         msgs.push(r.control?`✔ Control: ${r.acept} cuentas (${r.nuevos} nuevas) · ${r.hist} registros históricos`
-          :`✔ Funnel: ${r.acept} aceptados · ${r.nuevos} nuevos · ${r.act} cambios de estatus${r.viejas?' · '+r.viejas+' anteriores al inicio ignorados':''}`);}
+          :`✔ Funnel: ${r.acept} aceptados · ${r.nuevos} nuevos · ${r.act} cambios de estatus${r.viejas?' · '+r.viejas+' anteriores al inicio ignorados':''}${r.forz?' · '+r.forz+' agregados por ID':''}${r.forzNo?'\n⚠ No se agregaron (no son aceptados): '+r.forzNo.join(', '):''}`);}
       else{r={filas:0,match:0,enr:0,desX:0};
         if(it.t==='nuevos')importNuevos(it.sheets[0],r);else importRenov(it.sheets[0],r);
         DB.imports.push({ts:new Date().toISOString(),archivo:it.f.name,tipo:it.t,...r});persistQ();save();
@@ -741,6 +759,16 @@ $('#fj').onchange=async e=>{
     for(const id in DB.ev)DB.ev[id].forEach((e,i)=>{if(!e.uid)e.uid='rs:'+id+':'+e.t+':'+e.ts+':'+i;if(!PEND.some(p=>p.uid===e.uid))PEND.push({uid:e.uid,id,e});});
     reindex();CFG_DIRTY=true;persistQ();save();fillVista();render();toast('✔ Respaldo restaurado. Subiendo…');flush();
   }catch(err){toast('⚠ '+err.message);}
+};
+$('#mAdd').onclick=()=>{
+  const pint=()=>{const L=DB.cfg.forzar||[];$('#ad_list').innerHTML=L.length?'<label>En espera de la próxima carga del funnel</label>'+L.map(x=>`<div class="cstate"><span class="pill flag">${esc(x)}</span><button class="btn sec" style="padding:2px 8px" data-q="${esc(x)}">quitar</button></div>`).join(''):'';
+    $('#ad_list').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{DB.cfg.forzar=(DB.cfg.forzar||[]).filter(v=>v!==b.dataset.q);CFG_DIRTY=true;save();flush();pint();});};
+  openSheet(`<div class="shead"><h3>Agregar approval por ID</h3><button class="x" data-close>×</button></div>
+  <p class="note">Para approvals consultados antes del inicio del seguimiento (${fmt(DB.cfg.inicio||'',false)||'—'}) que el gerente sí está trabajando. Solo el SolicitudID: la oficina, el asesor y lo demás salen del funnel.</p>
+  <div class="form on"><label>SolicitudID</label><input id="ad_id" inputmode="numeric" placeholder="Ej. 8094836">
+  <div class="err" id="ad_msg"></div><div class="row"><button class="btn" id="ad_ok">Agregar</button></div><div id="ad_list"></div></div>`);
+  pint();
+  $('#ad_ok').onclick=()=>{const r=agregaPorId($('#ad_id').value);$('#ad_msg').style.color=r.ok?'var(--ok)':'var(--bad)';$('#ad_msg').textContent=r.m;if(r.ok)$('#ad_id').value='';pint();};
 };
 $('#mIni').onclick=()=>{
   openSheet(`<div class="shead"><h3>Inicio del seguimiento</h3><button class="x" data-close>×</button></div>
@@ -823,6 +851,7 @@ function estadoPills(s){
   if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
   else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
   if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
+  if(s.c.forzado)h+=`<span class="pill flag">➕ agregado por ID</span>`;
   if(s.incum)h+=`<span class="pill ${s.incum>=2?'rep3':'rep'}">✖ ${s.incum} incumplido${s.incum>1?'s':''}</span>`;
   if(s.conflicto)h+=`<span class="pill flag">⚠ estaba rechazado</span>`;
   if(s.abierto&&!s.sinGestion&&s.sinMov>=3)h+=`<span class="pill flag">${s.sinMov}d sin mov.</span>`;
