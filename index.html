@@ -5,24 +5,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Approvals</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f3d6e">
+<meta name="theme-color" content="#000000">
 <link rel="icon" href="icons/favicon-32.png?v=4">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=4">
 <style>
-:root{--bg:#f3f4f6;--card:#fff;--ink:#1d2330;--mut:#6b7280;--line:#e5e7eb;--pri:#0f3d6e;--pri2:#1d5fa3;--ok:#15803d;--okb:#dcfce7;--warn:#b45309;--warnb:#fef3c7;--bad:#b91c1c;--badb:#fee2e2;--bad2:#7f1d1d;--chip:#eef2f7}
+:root{--bg:#f3f4f6;--card:#fff;--ink:#1d2330;--mut:#6b7280;--line:#e5e7eb;--pri:#0b0b0b;--pri2:#00857c;--brand:#00afa2;--brand2:#94e0de;--ok:#15803d;--okb:#dcfce7;--warn:#b45309;--warnb:#fef3c7;--bad:#b91c1c;--badb:#fee2e2;--bad2:#7f1d1d;--chip:#eef2f7}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 button,select,input,textarea{font:inherit}
-header{background:var(--pri);color:#fff;padding:10px 12px 0;position:sticky;top:0;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+header{background:#000;border-bottom:2px solid var(--brand);color:#fff;padding:10px 12px 0;position:sticky;top:0;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.15)}
 .hrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .htitle{font-weight:700;font-size:16px;flex:1;min-width:150px}
+.htitle .logo{height:22px;vertical-align:-4px;margin-right:8px}
+.htitle .app{color:var(--brand2);font-weight:700;padding-left:8px;border-left:1px solid #333}
 .htitle small{font-weight:400;opacity:.7;font-size:11px;margin-left:4px}
 .hbtn.warn{background:#f59e0b;border-color:#f59e0b;color:#111}
-.hbtn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 10px;cursor:pointer}
+.hbtn{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(0,175,162,.55);border-radius:8px;padding:6px 10px;cursor:pointer}
 .hsel{background:#fff;color:var(--ink);border:0;border-radius:8px;padding:6px 8px;max-width:180px}
 .tabs{display:flex;gap:4px;margin-top:8px}
-.tab{flex:1;background:transparent;color:#cfe0f3;border:0;border-bottom:3px solid transparent;padding:8px 4px;cursor:pointer;font-weight:600}
-.tab.on{color:#fff;border-bottom-color:#fff}
+.tab{flex:1;background:transparent;color:#9ca3af;border:0;border-bottom:3px solid transparent;padding:8px 4px;cursor:pointer;font-weight:600}
+.tab.on{color:#fff;border-bottom-color:var(--brand)}
 main{padding:10px 10px 40px;max-width:900px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .kpi{background:var(--card);border-radius:10px;padding:8px 6px;text-align:center;border:1px solid var(--line);cursor:pointer}
@@ -135,7 +137,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.8.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.8.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -172,7 +174,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.8.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.8.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
