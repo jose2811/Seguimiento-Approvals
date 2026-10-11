@@ -127,7 +127,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.5.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.5.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -163,7 +163,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.5.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.5.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -516,7 +516,7 @@ function importSheet(header,rows,archivo,r){
 const LLEN={a:'No inició',b:'Inició, no terminó',c:'Terminó, no llegó a mesa',d:'En mesa',e:'Desembolsado'};
 const GER_MESA=['Se sube a mesa','En mesa','Por desembolsar'];
 function tipoHoja(header){const H=header.map(norm);
-  if(H.includes('porque no se envio a mesa ?'))return 'verdes';
+  if(H.some(h=>h.startsWith('porque no se envio')))return 'verdes';
   if(H.includes('etapa'))return 'control';
   if(H.includes('segmento llenado datos'))return 'nuevos';
   if(H.includes('siguiente solicitud'))return 'renov';
