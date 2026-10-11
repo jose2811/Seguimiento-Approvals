@@ -137,7 +137,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.8.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.8.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -174,7 +174,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.8.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.8.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -913,7 +913,7 @@ function card(s){
       <div class="cstate">${estadoPills(s)}</div>
       ${s.lastCom?`<div class="ccom">💬 ${esc(s.lastCom)}</div>`:''}
     </div>
-    ${s.diasAs!=null&&s.abierto?`<div class="days d${aCls(s.diasAs)}"><b>${s.diasAs}</b><span>días asesor</span><span class="tot">${s.dias}d total</span></div>`:`<div class="days d${aCls(s.dias)}"><b>${s.dias}</b><span>días</span></div>`}
+    ${s.diasAs!=null&&s.abierto?`<div class="days d${aCls(s.diasAs)}"><b>${s.diasAs}</b><span>días asesor</span><span class="tot">${s.dias}d total</span></div>`:(!s.abierto&&s.diasCierre!=null?`<div class="days"><b style="color:#475569">${s.diasCierre}</b><span>días en cerrar</span></div>`:`<div class="days d${aCls(s.dias)}"><b>${s.dias}</b><span>días</span></div>`)}
   </div>`;
 }
 
