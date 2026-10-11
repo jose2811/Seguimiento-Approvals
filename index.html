@@ -129,7 +129,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.6.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.7.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -166,7 +166,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.6.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.7.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -660,12 +660,12 @@ const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
 const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
   const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
-  let open=null;const cal=[],calU={};let reacs=0,rechPrev='';
+  let open=null;const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
     const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
     // ¿Este movimiento resuelve el compromiso abierto? (solo se califica lo capturado en la app o el desembolso del sistema)
-    const sisDesEv=e.t==='sis'&&/DESEMB/i.test(e.est||'');
+    const sisDesEv=e.t==='sis'&&/DESEMB/i.test(e.est||'');if(sisDesEv)fSisDes=e.f;
     if(open&&(e.t==='etapa'||e.t==='repro'||e.t==='des'||e.t==='rech'||sisDesEv)){
       if(!e.hist){let res;
         if(e.t==='repro'||(e.t==='etapa'&&e.etapa==='Reagendado'))res=ef<=open.fprog?'atiempo':'incumplido';
@@ -692,9 +692,11 @@ function st(id){
   const dias=c.fsol?dd(c.fsol,HOY):0,diasAs=fAsig?dd(fAsig,HOY):null,sinMov=dd(lastG||c.fsol||c.alta,HOY);
   const venc=!cierre&&fprog&&fprog<HOY,hoyC=!cierre&&fprog===HOY;
   const incum=cal.filter(x=>x.res==='incumplido').length;
+  let fC='';if(cierre==='des')fC=c.fdes||fSisDes||(desG&&desG.f)||'';else if(cierre==='desPC')fC=desG.f;else if(cierre==='rech')fC=rech.hist&&c.alta&&rech.f>c.alta?c.alta:rech.f;
+  const diasCierre=fC&&c.fsol?Math.max(0,dd(c.fsol,fC)):null;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
   const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
-  return {c,evs,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
+  return {c,evs,fC,diasCierre,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>VISTA==='GP'||DB.cuentas[id].suc===VISTA).map(st);}
 
@@ -787,6 +789,10 @@ $('#mSync').onclick=()=>sincroniza(false);
 $('#bSync').onclick=()=>sincroniza(false);
 
 /* ================= Lista ================= */
+const SIMPLE=()=>!ES_GP();
+const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
+function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
+const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
 const F={q:'f_abiertos',suc:'',asesor:'',seg:'',txt:''};
 const FILTROS=[
   ['f_abiertos','Abiertos',s=>s.abierto],
@@ -814,22 +820,29 @@ function renderLista(){
   const base=all.filter(s=>(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg));
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
-  const fn=FILTROS.find(f=>f[0]===F.q)[2],q=norm(F.txt);
+  const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
+  const fn=FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
   const shown=list.slice(0,300);
   $('#vLista').innerHTML=`
-  <div class="kpis">
+  ${SIMPLE()?`<div class="kpis">
+    <div class="kpi" data-q="f_abiertos"><b>${k.ab}</b><span>Abiertos</span></div>
+    <div class="kpi ${ab.filter(s=>s.sinGestion).length?'warn':''}" data-q="f_sing"><b>${ab.filter(s=>s.sinGestion).length}</b><span>Sin gestión</span></div>
+    <div class="kpi ${k.venc?'bad':''}" data-q="f_venc"><b>${k.venc}</b><span>Compromiso vencido</span></div>
+    <div class="kpi ${pa>14?'bad':pa>7?'warn':''}"><b>${pa??'—'}</b><span>Días prom. abiertos</span></div>
+  </div>`:`<div class="kpis">
     <div class="kpi" data-q="f_abiertos"><b>${k.ab}</b><span>Abiertos</span></div>
     <div class="kpi ${k.a30?'bad':''}" data-q="f_30"><b>${k.a30}</b><span>+30 días</span></div>
     <div class="kpi ${k.venc?'bad':''}" data-q="f_venc"><b>${k.venc}</b><span>Compromiso vencido</span></div>
     <div class="kpi ${k.rep?'warn':''}" data-q="f_rep"><b>${k.rep}</b><span>↻ 2+ veces</span></div>
-  </div>
-  <div class="filters">${FILTROS.map(f=>`<button class="fchip ${F.q===f[0]?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
+  </div>`}
+  <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
+  <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${VISTA==='GP'?`<select id="fSuc"><option value="">Todas las sucursales</option>${sucs.map(x=>`<option ${F.suc===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
     <select id="fAse"><option value="">Todos los asesores</option>${asesores.map(x=>`<option ${F.asesor===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
-    <select id="fSeg"><option value="">A / B / C</option>${['A','B','C'].map(x=>`<option ${F.seg===x?'selected':''} value="${x}">Aceptado ${x}</option>`).join('')}</select>
+    ${SIMPLE()?'':`<select id="fSeg"><option value="">A / B / C</option>${['A','B','C'].map(x=>`<option ${F.seg===x?'selected':''} value="${x}">Aceptado ${x}</option>`).join('')}</select>`}
     <input id="fTxt" placeholder="Buscar nombre o ID" value="${esc(F.txt)}">
   </div>
   <div class="count">${list.length} cuenta${list.length===1?'':'s'}${list.length>300?' · mostrando 300':''}</div>
@@ -841,7 +854,8 @@ function renderLista(){
   document.querySelectorAll('.card').forEach(el=>el.onclick=()=>openDetalle(el.dataset.id));
 }
 function aCls(d){return d>30?'30':d>14?'15':d>7?'8':'0';}
-function estadoPills(s){
+function estadoPills(s,full){
+  if(full===undefined)full=!SIMPLE();
   let h='';
   if(s.cierre==='des')h+=`<span class="pill des">✔ Desembolsado${s.c.fdes?' '+fmt(s.c.fdes,false):''}</span>`;
   else if(s.cierre==='desPC')h+=`<span class="pill des">✔ Desembolsado</span><span class="pill flag">por confirmar en sistema</span>`;
@@ -849,6 +863,11 @@ function estadoPills(s){
   else if(s.sinGestion)h+=`<span class="pill et0">Sin gestión</span>`;
   else h+=`<span class="pill et">${esc(s.etapa)}${s.falta?' · '+esc(s.falta):''}</span>`;
   if(s.fprog&&s.abierto)h+=`<span class="pill ${s.venc?'venc':'fok'}">${s.venc?'⚠ vencido ':s.hoyC?'hoy ':''}${fmt(s.fprog)}</span>`;
+  if(!full){ // modo sencillo: una sola alerta, la más importante
+    if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
+    else if(s.incum)h+=`<span class="pill rep">✖ ${s.incum} incumplido${s.incum>1?'s':''}</span>`;
+    else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e'&&!s.sisMesa)h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
+    return h;}
   if(s.repros)h+=`<span class="pill ${s.repros>=3?'rep3':'rep'}">↻ ${s.repros} ${s.repros===1?'vez':'veces'}</span>`;
   if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
   else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
@@ -901,7 +920,7 @@ function openDetalle(id){
   const rechCats=Object.keys(RECH).map(k=>`<option>${k}</option>`).join('');
   openSheet(`
   <div class="shead"><div><h3>${esc(c.nombre)}</h3><div class="note">#${esc(c.id)} · ${esc(c.suc)} · <b>${esc(s.asesorAct)}</b>${s.reasigs?` <span class="pill rea">↔ antes ${esc(s.asesorPrev)}</span>`:''}</div></div><button class="x" data-close>×</button></div>
-  <div class="cstate">${estadoPills(s)}</div>
+  <div class="cstate">${estadoPills(s,true)}</div>
   <div class="grid2">
     <div><span>Segmento</span>${esc(c.seg.replace(/^\S+\)\s*/,''))}</div>
     <div><span>Tipo</span>${esc(c.tipo)}</div>
@@ -1057,7 +1076,7 @@ function metr(arr){
     if(s.conflicto)m.conf++;
     if(s.abierto){m.ab++;if(s.dias>30)m.a30++;else if(s.dias>14)m.a15++;if(s.venc)m.venc++;if(s.repros>=2)m.rep++;if(s.sinGestion)m.sing++;}
   }
-  m.rech=m.perfil+m.mesaR+m.cli+m.otro;return m;
+  m.rech=m.perfil+m.mesaR+m.cli+m.otro;m.dc=cierre30(arr).prom;return m;
 }
 function mesL(m){const [y,mm]=m.split('-');return MES[+mm-1]+' '+y;}
 function compHTML(all){
@@ -1100,8 +1119,26 @@ function benchHTML(){
   <details style="margin-top:8px"><summary style="font-size:13px">Por asesor (${ases.length}) — ordenado por % que no inició</summary><div class="tw" style="margin-top:6px"><table>${head.replace('<th></th>','<th>Asesor</th>')}${ases.map(x=>row(x.k+(VISTA==='GP'?' · '+x.suc.replace('CI-',''):''),x.t)).join('')}</table></div></details>
   <p class="note"><b>Inició</b> = inició y no terminó la solicitud · <b>Terminó</b> = terminó y no llegó a mesa. Solo nuevos con pre-approval aprobado. "No inició" alto = approvals que se pidieron y el cliente nunca arrancó la solicitud. Actualizado ${fmtTs(B.ts)}.</p></div>`;
 }
+function renderConcSimple(all){
+  const ab=all.filter(s=>s.abierto),c30=cierre30(all),pa=promAb(all);
+  const g={};all.forEach(s=>{const k=s.asesorAct||'(sin asesor)';(g[k]=g[k]||[]).push(s);});
+  const rows=Object.keys(g).map(k=>{const a=g[k],o=a.filter(s=>s.abierto),c=cierre30(a);return {k,ab:o.length,a30:o.filter(s=>s.dias>30).length,venc:o.filter(s=>s.venc).length,sg:o.filter(s=>s.sinGestion).length,pa:promAb(a),cn:c.n,cp:c.prom};}).sort((a,b)=>(b.pa??0)-(a.pa??0));
+  $('#vConc').innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><b>${ab.length}</b><span>Abiertos</span></div>
+    <div class="kpi ${pa>14?'bad':pa>7?'warn':''}"><b>${pa??'—'}</b><span>Días prom. abiertos</span></div>
+    <div class="kpi"><b>${c30.n}</b><span>Cerradas 30 días</span></div>
+    <div class="kpi"><b style="color:var(--ok)">${c30.prom??'—'}</b><span>Días prom. para cerrar</span></div>
+  </div>
+  <div class="panel"><h3>Por asesor</h3><div class="tw"><table>
+    <tr><th>Asesor</th><th>Abiertos</th><th>Sin gest.</th><th>Venc.</th><th>+30d</th><th>Días prom. abiertos</th><th>Cerradas 30d</th><th>Días para cerrar</th></tr>
+    ${rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${r.ab}</td><td class="${r.sg?'hw':''}">${r.sg}</td><td class="${r.venc?'hb':''}">${r.venc}</td><td class="${r.a30?'hb':''}">${r.a30}</td><td class="${r.pa>14?'hb':r.pa>7?'hw':''}">${r.pa??'—'}</td><td>${r.cn}</td><td>${r.cp??'—'}</td></tr>`).join('')}
+  </table></div>
+  <p class="note">La meta: que cada aceptado llegue rápido a <b>desembolsado</b> o <b>rechazado con motivo</b>. Menos días = mejor. "Días para cerrar" cuenta desde la solicitud hasta el cierre, de las cuentas cerradas en los últimos 30 días.</p></div>`;
+}
 function renderConc(){
   const all0=visibles();
+  if(SIMPLE())return renderConcSimple(all0);
   if(!all0.length){$('#vConc').innerHTML='<div class="empty">Carga primero el export del funnel.</div>';return;}
   const sems=[...new Set(all0.map(s=>s.c.sem))].filter(Boolean).sort().reverse();
   if(C.sem&&!sems.includes(C.sem))C.sem='';
@@ -1109,7 +1146,7 @@ function renderConc(){
   const T=metr(all);
   const grp=(key)=>{const g={};all.forEach(s=>{const k=key(s)||'(sin dato)';(g[k]=g[k]||[]).push(s);});return g;};
   const bySuc=grp(s=>s.c.suc),byAse=grp(s=>s.asesorAct),bySeg=grp(s=>s.seg?'Aceptado '+s.seg:'');
-  const rowSuc=(name,m,tot)=>`<tr class="${tot?'tot':''}"><td>${esc(name.replace('CI-',''))}</td><td>${m.acept}</td><td>${m.des}</td><td>${pct(m.des,m.acept)}</td><td>${m.rech}</td><td class="${m.perfil?'hw':''}">${m.perfil}</td><td>${m.ab}</td><td class="${m.a15?'hw':''}">${m.a15}</td><td class="${m.a30?'hb':''}">${m.a30}</td><td class="${m.venc?'hb':''}">${m.venc}</td><td class="${m.rep?'hw':''}">${m.rep}</td><td>${m.sing}</td></tr>`;
+  const rowSuc=(name,m,tot)=>`<tr class="${tot?'tot':''}"><td>${esc(name.replace('CI-',''))}</td><td>${m.acept}</td><td>${m.des}</td><td>${pct(m.des,m.acept)}</td><td>${m.rech}</td><td class="${m.perfil?'hw':''}">${m.perfil}</td><td>${m.ab}</td><td class="${m.a15?'hw':''}">${m.a15}</td><td class="${m.a30?'hb':''}">${m.a30}</td><td class="${m.venc?'hb':''}">${m.venc}</td><td class="${m.rep?'hw':''}">${m.rep}</td><td>${m.sing}</td><td><b>${m.dc??'—'}</b></td></tr>`;
   const sucRows=Object.keys(bySuc).sort().map(k=>rowSuc(k,metr(bySuc[k]))).join('');
   const quit={};all.forEach(s=>s.evs.forEach(e=>{if(e.t==='reasig')quit[e.de]=(quit[e.de]||0)+1;}));
   const ases=[...new Set([...Object.keys(byAse),...Object.keys(quit)])].map(k=>({k,m:metr(byAse[k]||[]),suc:(byAse[k]||all.filter(s=>s.evs.some(e=>e.de===k)))[0].c.suc,q:quit[k]||0})).sort((a,b)=>(b.m.perfil-a.m.perfil)||(b.m.ab-a.m.ab));
@@ -1125,7 +1162,7 @@ function renderConc(){
     <div class="kpi ${T.a30?'bad':''}"><b>${T.ab}</b><span>Abiertos (${T.a30} +30d)</span></div>
   </div>
   <div class="panel"><h3>Por sucursal</h3><div class="tw"><table>
-    <tr><th></th><th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Rech.</th><th>Perfil</th><th>Abiertos</th><th>15-30d</th><th>+30d</th><th>Venc.</th><th>↻2+</th><th>Sin gest.</th></tr>
+    <tr><th></th><th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Rech.</th><th>Perfil</th><th>Abiertos</th><th>15-30d</th><th>+30d</th><th>Venc.</th><th>↻2+</th><th>Sin gest.</th><th>Días cierre 30d</th></tr>
     ${sucRows}${VISTA==='GP'?rowSuc('Total región',T,true):''}
   </table></div>
   <p class="note">Por asesor se cuenta con el asesor actual (después de reasignar). <b>↔ Quitadas</b> = cuentas que se le reasignaron a otro.</p>
