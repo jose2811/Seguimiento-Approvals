@@ -137,7 +137,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -538,7 +538,7 @@ function importSheet(header,rows,archivo,r){
    Por semana → sucursal → asesor: [approvals, aceptados, approvals nuevos, aceptados nuevos] */
 function apvAgg(map,pick,r){
   if(map.sem==null)return;
-  const sem={};let fmax='';
+  const sem={},dia={};let fmax='';
   for(const [,row] of pick){
     const g=k=>map[k]==null?'':row[map[k]];
     const w=String(g('sem')||'').trim();if(!/^\d{4}-\d{1,2}$/.test(w))continue;
@@ -548,13 +548,17 @@ function apvAgg(map,pick,r){
     const t=((sem[w]=sem[w]||{})[s]=sem[w][s]||{})[a]=sem[w][s][a]||[0,0,0,0];
     t[0]++;t[1]+=acc;t[2]+=nv;t[3]+=acc&&nv?1:0;
     const f=toISODate(g('fsol'));if(f>fmax)fmax=f;
+    if(f){const u=((dia[f]=dia[f]||{})[s]=dia[f][s]||{})[a]=dia[f][s][a]||[0,0];u[0]++;u[1]+=acc;}
   }
   const ws=Object.keys(sem).sort(cmpSem);if(!ws.length)return;
   const prev=(DB.cfg.apv&&DB.cfg.apv.sem)||{};
   // semanas ya cerradas (más de 2 semanas atrás) se congelan: el funnel puede ir soltando filas viejas
   const corte=semDe(addDays(hoyISO(),-14));
   for(const w of ws)if(prev[w]&&cmpSem(w,corte)<0)delete sem[w];
-  DB.cfg.apv={ts:new Date().toISOString(),fmax,sem:{...prev,...sem}};CFG_DIRTY=true;r.apv=ws.length;
+  const pd=(DB.cfg.apv&&DB.cfg.apv.dia)||{},dC=addDays(hoyISO(),-14),dV=addDays(hoyISO(),-200);
+  for(const d in dia)if(pd[d]&&d<dC)delete dia[d];
+  const dAll={...pd,...dia};for(const d in dAll)if(d<dV)delete dAll[d];
+  DB.cfg.apv={ts:new Date().toISOString(),fmax,sem:{...prev,...sem},dia:dAll};CFG_DIRTY=true;r.apv=ws.length;
 }
 const cmpSem=(a,b)=>{const [ya,wa]=a.split('-').map(Number),[yb,wb]=b.split('-').map(Number);return ya-yb||wa-wb;};
 function lunesSem(w){const [y,n]=w.split('-').map(Number);const j4=new Date(Date.UTC(y,0,4)),d=(j4.getUTCDay()+6)%7;return new Date(j4.getTime()+((n-1)*7-d)*864e5);}
@@ -1202,6 +1206,13 @@ function renderApv(){
   }
   const ult8=ws.slice(-8).reverse();
   const trend=`<h4>Últimas semanas${A.ase?' · '+esc(corto(A.ase)):A.suc?' · '+esc(A.suc.replace('CI-','')):' · región'}</h4><div class="tw"><table>${head('Semana')}${ult8.map(w=>row(semL(w).replace('Sem ','')+(semN(w)===hoyW?' •':''),tot(w),'',w===A.sem?'tot':'').replace(' style="cursor:pointer"','')).join('')}</table></div>`;
+  const L=lunesSem(A.sem),DI=(D.dia||{}),DL=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const tDia=d=>{const o=DI[d]||{};let t=[0,0];const ss=A.suc?[A.suc]:Object.keys(o);
+    for(const s of ss){const x=o[s]||{};for(const a in x)if(!A.ase||a===A.ase){t[0]+=x[a][0];t[1]+=x[a][1];}}return t;};
+  const dias=[0,1,2,3,4,5,6].map(i=>{const d=new Date(L.getTime()+i*864e5).toISOString().slice(0,10);return {i,d,t:tDia(d)};}).filter(x=>x.i<6||x.t[0]);
+  const hayDia=dias.some(x=>x.t[0]);
+  const strip=hayDia?`<div style="display:grid;grid-template-columns:repeat(${dias.length},1fr);gap:4px;margin:6px 0 4px">${dias.map(x=>{const fut=x.d>D.fmax;
+    return `<div style="text-align:center;border:1px solid var(--line);border-radius:8px;padding:5px 2px;background:${fut?'#f9fafb':'var(--card)'}${x.d===HOY?';border-color:var(--brand)':''}"><div style="font-size:11px;color:var(--mut)">${DL[x.i]} ${+x.d.slice(8)}</div><b style="font-size:17px;color:${fut?'#cbd5e1':'inherit'}">${fut?'·':x.t[0]}</b><div style="font-size:11px;color:var(--ok)">${fut?'&nbsp;':x.t[1]+' ac.'}</div></div>`;}).join('')}</div><p class="note" style="margin-top:0">Approvals por día · ac. = aceptados</p>`:'';
   const nivel=A.ase?esc(corto(A.ase))+' · '+esc(A.suc.replace('CI-','')):A.suc?esc(A.suc.replace('CI-','')):'Región Jalisco';
   const back=(gp&&A.suc)||A.ase?`<button class="btn" id="aBack" style="margin-bottom:8px">← ${A.ase?(A.suc.replace('CI-','')):'Región'}</button>`:'';
   el.innerHTML=`<div class="panel">
@@ -1212,6 +1223,7 @@ function renderApv(){
       <div class="kpi"><b style="color:var(--ok)">${T[1]}</b><span>Aceptados</span></div>
       <div class="kpi"><b>${pct(T[1],T[0])}</b><span>% aceptados</span></div>
     </div>
+    ${strip}
     <p class="note">Datos al cierre de <b>${fmt(D.fmax)}</b> (carga del ${fmtTs(D.ts)}). ${cur?'Semana en curso: lo de hoy sale en la carga de mañana.':''}${ult!==hoyW&&semN(A.sem)===ult&&cmpSem(ult,hoyW)<0?'La semana actual aparece desde la carga del martes (trae los approvals del lunes).':''} De los aceptados, ${T[3]} son nuevos.</p>
     ${tabla}</div>
   <div class="panel">${trend}<p class="note">• = semana en curso. Semana según la columna "Semana" del funnel. Approvals = todas las consultas (nuevos y renovaciones); aceptados = A, B y C.</p></div>`;
