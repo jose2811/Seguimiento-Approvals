@@ -137,7 +137,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.8.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -145,6 +145,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
   </div>
   <div class="tabs">
     <button class="tab on" data-tab="lista">Pendientes</button>
+    <button class="tab" data-tab="apv">Approvals</button>
     <button class="tab" data-tab="conc">Concentrado</button>
   </div>
   <div class="menu" id="menu">
@@ -164,6 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 
 <main>
   <section id="vLista"></section>
+  <section id="vApv" hidden></section>
   <section id="vConc" hidden></section>
 </main>
 <footer>created by Joe Fdz &amp; Claude !!</footer>
@@ -372,9 +374,10 @@ async function pull(full){
   const es=await getAll('eventos',s.e?'&creado=gt.'+encodeURIComponent(over(s.e)):'','creado.asc,uid.asc');
   for(const r of es){applyEvRow(r);if(!s.e||r.creado>s.e)s.e=r.creado;}
   for(const p of PEND)if(!UIDS.has(p.uid)){(DB.ev[p.id]=DB.ev[p.id]||[]).push(p.e);UIDS.add(p.uid);}
-  const cfg=await rest('config?select=*');const ini=(cfg||[]).find(x=>x.k==='inicio');if(ini&&!CFG_DIRTY)DB.cfg.inicio=ini.v||'';
+  const cfg=await rest('config?select=*&k=in.(inicio,bench,forzar,apv)');const ini=(cfg||[]).find(x=>x.k==='inicio');if(ini&&!CFG_DIRTY)DB.cfg.inicio=ini.v||'';
   const bn=(cfg||[]).find(x=>x.k==='bench');if(bn&&!CFG_DIRTY)DB.cfg.bench=bn.v;
   const fz=(cfg||[]).find(x=>x.k==='forzar');if(fz&&!CFG_DIRTY)DB.cfg.forzar=fz.v||[];
+  const av=(cfg||[]).find(x=>x.k==='apv');if(av&&!CFG_DIRTY)DB.cfg.apv=av.v;
   save();
 }
 async function enviar(tabla,rows,prefer){
@@ -396,7 +399,7 @@ async function flush(){
       await enviar('cuentas?on_conflict=id',ids.map(id=>({id,sucursal:DB.cuentas[id].suc||'SIN SUCURSAL',data:DB.cuentas[id]})),'resolution=merge-duplicates,return=minimal');
       ids.forEach(id=>DIRTY.delete(id));persistQ();
     }
-    if(CFG_DIRTY&&ES_GP()){const body=[{k:'inicio',v:DB.cfg.inicio||''}];if(DB.cfg.bench)body.push({k:'bench',v:DB.cfg.bench});body.push({k:'forzar',v:DB.cfg.forzar||[]});
+    if(CFG_DIRTY&&ES_GP()){const body=[{k:'inicio',v:DB.cfg.inicio||''}];if(DB.cfg.bench)body.push({k:'bench',v:DB.cfg.bench});body.push({k:'forzar',v:DB.cfg.forzar||[]});if(DB.cfg.apv)body.push({k:'apv',v:DB.cfg.apv});
       await rest('config?on_conflict=k',{method:'POST',body,prefer:'resolution=merge-duplicates,return=minimal'});CFG_DIRTY=false;}
     if(PEND.length){
       const lote=PEND.slice();
@@ -528,9 +531,35 @@ function importSheet(header,rows,archivo,r){
     }
   }
   if(forz.size!==forz0){DB.cfg.forzar=[...forz];CFG_DIRTY=true;}
-  if(!control)lsSet('segAceptados_viejas',VIEJAS);
+  if(!control){lsSet('segAceptados_viejas',VIEJAS);apvAgg(map,pick,r);}
   return control;
 }
+/* Conteo de approvals por semana del sistema (columna "Semana"): solo números, nunca datos del cliente.
+   Por semana → sucursal → asesor: [approvals, aceptados, approvals nuevos, aceptados nuevos] */
+function apvAgg(map,pick,r){
+  if(map.sem==null)return;
+  const sem={};let fmax='';
+  for(const [,row] of pick){
+    const g=k=>map[k]==null?'':row[map[k]];
+    const w=String(g('sem')||'').trim();if(!/^\d{4}-\d{1,2}$/.test(w))continue;
+    const s=String(g('suc')||'').trim()||'SIN SUCURSAL',a=String(g('asesor')||'').trim()||'(sin asesor)';
+    const seg=String(g('seg')||''),est=String(g('est')||'');
+    const acc=/ACEPTADO/i.test(seg)||(!seg&&/ACEPTADO|MESA|DESEMB/i.test(est))?1:0,nv=/nuevo/i.test(String(g('tipo')||''))?1:0;
+    const t=((sem[w]=sem[w]||{})[s]=sem[w][s]||{})[a]=sem[w][s][a]||[0,0,0,0];
+    t[0]++;t[1]+=acc;t[2]+=nv;t[3]+=acc&&nv?1:0;
+    const f=toISODate(g('fsol'));if(f>fmax)fmax=f;
+  }
+  const ws=Object.keys(sem).sort(cmpSem);if(!ws.length)return;
+  const prev=(DB.cfg.apv&&DB.cfg.apv.sem)||{};
+  // semanas ya cerradas (más de 2 semanas atrás) se congelan: el funnel puede ir soltando filas viejas
+  const corte=semDe(addDays(hoyISO(),-14));
+  for(const w of ws)if(prev[w]&&cmpSem(w,corte)<0)delete sem[w];
+  DB.cfg.apv={ts:new Date().toISOString(),fmax,sem:{...prev,...sem}};CFG_DIRTY=true;r.apv=ws.length;
+}
+const cmpSem=(a,b)=>{const [ya,wa]=a.split('-').map(Number),[yb,wb]=b.split('-').map(Number);return ya-yb||wa-wb;};
+function lunesSem(w){const [y,n]=w.split('-').map(Number);const j4=new Date(Date.UTC(y,0,4)),d=(j4.getUTCDay()+6)%7;return new Date(j4.getTime()+((n-1)*7-d)*864e5);}
+function semL(w){const l=lunesSem(w),s=new Date(l.getTime()+6*864e5),m=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return 'Sem '+w.split('-')[1]+' · '+l.getUTCDate()+(l.getUTCMonth()!==s.getUTCMonth()?' '+m[l.getUTCMonth()]:'')+'–'+s.getUTCDate()+' '+m[s.getUTCMonth()];}
 function agregaPorId(id){
   id=String(id||'').trim();if(!/^\d+$/.test(id))return {m:'El SolicitudID debe ser solo números',ok:false};
   if(DB.cuentas[id])return {m:'Ese approval ya está en la app ('+DB.cuentas[id].suc.replace('CI-','')+')',ok:false};
@@ -717,7 +746,7 @@ function fillVista(){
   $('#vista').innerHTML='<option value="GP">Región Jalisco (GP)</option>'+[...s].sort().map(x=>`<option value="${esc(x)}">${esc(x.replace('CI-',''))}</option>`).join('');
   $('#vista').value=VISTA;
 }
-$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.suc='';F.asesor='';render();};
+$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.suc='';F.asesor='';A.suc='';A.ase='';render();};
 let TAB='lista';
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{TAB=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render();});
 $('#bMenu').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('on');};
@@ -744,7 +773,7 @@ $('#fx').onchange=async e=>{
       let r;
       if(it.t==='control'||it.t==='funnel'){r=importFile(it.sheets,it.f.name);
         msgs.push(r.control?`✔ Control: ${r.acept} cuentas (${r.nuevos} nuevas) · ${r.hist} registros históricos`
-          :`✔ Funnel: ${r.acept} aceptados · ${r.nuevos} nuevos · ${r.act} cambios de estatus${r.viejas?' · '+r.viejas+' anteriores al inicio ignorados':''}${r.forz?' · '+r.forz+' agregados por ID':''}${r.forzNo?'\n⚠ No se agregaron (no son aceptados): '+r.forzNo.join(', '):''}`);}
+          :`✔ Funnel: ${r.acept} aceptados · ${r.nuevos} nuevos · ${r.act} cambios de estatus${r.viejas?' · '+r.viejas+' anteriores al inicio ignorados':''}${r.forz?' · '+r.forz+' agregados por ID':''}${r.apv?' · conteo de approvals ('+r.apv+' semanas)':''}${r.forzNo?'\n⚠ No se agregaron (no son aceptados): '+r.forzNo.join(', '):''}`);}
       else{r={filas:0,match:0,enr:0,desX:0};
         if(it.t==='nuevos')importNuevos(it.sheets[0],r);else importRenov(it.sheets[0],r);
         DB.imports.push({ts:new Date().toISOString(),archivo:it.f.name,tipo:it.t,...r});persistQ();save();
@@ -821,7 +850,7 @@ const FILTROS=[
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
   ['f_cerr','Cerrados',s=>!s.abierto&&(ES_GP()||!s.fC||s.fC>=addDays(HOY,-30))],
 ];
-function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vConc').hidden=TAB!=='conc';TAB==='lista'?renderLista():renderConc();}
+function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vApv').hidden=TAB!=='apv';$('#vConc').hidden=TAB!=='conc';TAB==='lista'?renderLista():TAB==='apv'?renderApv():renderConc();}
 function renderLista(){
   const all=visibles();
   if(!all.length&&!ES_GP()){$('#vLista').innerHTML=`<div class="empty"><b>Sin cuentas por ahora</b><br>Aquí aparecen los aceptados de tu sucursal en cuanto José carga el funnel.</div>`;return;}
@@ -1143,6 +1172,53 @@ function benchHTML(){
   <h4>Por sucursal</h4><div class="tw"><table>${head}${sucT.map(x=>row(x.k.replace('CI-',''),x.t)).join('')}</table></div>
   <details style="margin-top:8px"><summary style="font-size:13px">Por asesor (${ases.length}) — ordenado por % que no inició</summary><div class="tw" style="margin-top:6px"><table>${head.replace('<th></th>','<th>Asesor</th>')}${ases.map(x=>row(x.k+(VISTA==='GP'?' · '+x.suc.replace('CI-',''):''),x.t)).join('')}</table></div></details>
   <p class="note"><b>Inició</b> = inició y no terminó la solicitud · <b>Terminó</b> = terminó y no llegó a mesa. Solo nuevos con pre-approval aprobado. "No inició" alto = approvals que se pidieron y el cliente nunca arrancó la solicitud. Actualizado ${fmtTs(B.ts)}.</p></div>`;
+}
+/* ================= Pestaña Approvals: conteo semanal (semana del sistema) ================= */
+const A={sem:'',suc:'',ase:''};
+const corto=n=>{const w=String(n||'').trim().split(/\s+/).filter(x=>!/^(DE|DEL|LA|LAS|LOS|Y)$/i.test(x));const t=x=>x?x[0]+x.slice(1).toLowerCase():'';return w.length>=3?t(w[0])+' '+t(w[w.length-2]):w.map(t).join(' ');};
+function semDe(iso){const d=new Date(iso+'T12:00:00Z'),t=new Date(d);t.setUTCDate(d.getUTCDate()+3-((d.getUTCDay()+6)%7));
+  const y=t.getUTCFullYear(),j4=new Date(Date.UTC(y,0,4));return y+'-'+String(1+Math.round(((t-j4)/864e5-3+((j4.getUTCDay()+6)%7))/7)).padStart(2,'0');}
+const semN=w=>{const [y,n]=w.split('-');return y+'-'+String(+n).padStart(2,'0');};
+function renderApv(){
+  const el=$('#vApv'),D=DB.cfg.apv;
+  if(!D||!D.sem||!Object.keys(D.sem).length){el.innerHTML=`<div class="panel"><h3>Approvals de la semana</h3><p class="note">${ES_GP()?'Carga el funnel para ver el conteo de approvals.':'Todavía no hay datos. Aparecen cuando el GP carga el funnel.'}</p></div>`;return;}
+  const ws=Object.keys(D.sem).sort(cmpSem);
+  if(!A.sem||!D.sem[A.sem])A.sem=ws[ws.length-1];
+  const gp=VISTA==='GP';if(!gp){A.suc=VISTA;}else if(A.suc&&!Object.values(D.sem).some(w=>w[A.suc]))A.suc='';
+  const z=()=>[0,0,0,0],add=(t,v)=>{for(let i=0;i<4;i++)t[i]+=v[i];return t;};
+  const tSuc=(w,s)=>{const o=(D.sem[w]||{})[s]||{};return Object.values(o).reduce(add,z());};
+  const tReg=w=>Object.keys(D.sem[w]||{}).reduce((t,s)=>add(t,tSuc(w,s)),z());
+  const tAse=(w,s,a)=>((D.sem[w]||{})[s]||{})[a]||z();
+  const tot=w=>A.ase?tAse(w,A.suc,A.ase):A.suc?tSuc(w,A.suc):tReg(w);
+  const T=tot(A.sem),hoyW=semDe(HOY),cur=semN(A.sem)===hoyW,ult=semN(ws[ws.length-1]);
+  const row=(name,t,attr,cls)=>`<tr ${attr||''} class="${cls||''}"${attr?' style="cursor:pointer"':''}><td>${esc(name)}${attr?' <span style="color:var(--mut)">›</span>':''}</td><td>${t[0]}</td><td>${t[1]}</td><td><b>${pct(t[1],t[0])}</b></td></tr>`;
+  const head=f=>`<tr><th>${f}</th><th>Approvals</th><th>Acept.</th><th>%</th></tr>`;
+  let tabla='';
+  if(!A.ase){
+    if(!A.suc){const ss=Object.keys(D.sem[A.sem]||{}).sort();
+      tabla=`<h4>Por oficina</h4><div class="tw"><table>${head('Oficina')}${ss.map(s=>row(s.replace('CI-',''),tSuc(A.sem,s),`data-suc="${esc(s)}"`)).join('')}${row('Total región',T,'','tot').replace(' style="cursor:pointer"','')}</table></div><p class="note">Toca una oficina para ver a sus asesores.</p>`;}
+    else{const o=(D.sem[A.sem]||{})[A.suc]||{};const as=Object.keys(o).sort((a,b)=>o[b][0]-o[a][0]||a.localeCompare(b));
+      tabla=`<h4>Por asesor</h4><div class="tw"><table>${head('Asesor')}${as.map(a=>row(corto(a),o[a],`data-ase="${esc(a)}"`)).join('')}${row('Total oficina',T,'','tot')}</table></div>${as.length?'<p class="note">Toca un asesor para ver sus últimas semanas.</p>':'<p class="note">Sin approvals esta semana.</p>'}`;}
+  }
+  const ult8=ws.slice(-8).reverse();
+  const trend=`<h4>Últimas semanas${A.ase?' · '+esc(corto(A.ase)):A.suc?' · '+esc(A.suc.replace('CI-','')):' · región'}</h4><div class="tw"><table>${head('Semana')}${ult8.map(w=>row(semL(w).replace('Sem ','')+(semN(w)===hoyW?' •':''),tot(w),'',w===A.sem?'tot':'').replace(' style="cursor:pointer"','')).join('')}</table></div>`;
+  const nivel=A.ase?esc(corto(A.ase))+' · '+esc(A.suc.replace('CI-','')):A.suc?esc(A.suc.replace('CI-','')):'Región Jalisco';
+  const back=(gp&&A.suc)||A.ase?`<button class="btn" id="aBack" style="margin-bottom:8px">← ${A.ase?(A.suc.replace('CI-','')):'Región'}</button>`:'';
+  el.innerHTML=`<div class="panel">
+    <div class="frow"><select id="aSem">${ws.slice().reverse().map(w=>`<option value="${w}" ${w===A.sem?'selected':''}>${semL(w)}${semN(w)===hoyW?' (en curso)':''}</option>`).join('')}</select></div>
+    ${back}<h3>${nivel}</h3>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi"><b>${T[0]}</b><span>Approvals</span></div>
+      <div class="kpi"><b style="color:var(--ok)">${T[1]}</b><span>Aceptados</span></div>
+      <div class="kpi"><b>${pct(T[1],T[0])}</b><span>% aceptados</span></div>
+    </div>
+    <p class="note">Datos al cierre de <b>${fmt(D.fmax)}</b> (carga del ${fmtTs(D.ts)}). ${cur?'Semana en curso: lo de hoy sale en la carga de mañana.':''}${ult!==hoyW&&semN(A.sem)===ult&&cmpSem(ult,hoyW)<0?'La semana actual aparece desde la carga del martes (trae los approvals del lunes).':''} De los aceptados, ${T[3]} son nuevos.</p>
+    ${tabla}</div>
+  <div class="panel">${trend}<p class="note">• = semana en curso. Semana según la columna "Semana" del funnel. Approvals = todas las consultas (nuevos y renovaciones); aceptados = A, B y C.</p></div>`;
+  $('#aSem').onchange=e=>{A.sem=e.target.value;renderApv();};
+  if($('#aBack'))$('#aBack').onclick=()=>{if(A.ase)A.ase='';else A.suc='';renderApv();};
+  el.querySelectorAll('[data-suc]').forEach(tr=>tr.onclick=()=>{A.suc=tr.dataset.suc;A.ase='';renderApv();});
+  el.querySelectorAll('[data-ase]').forEach(tr=>tr.onclick=()=>{A.ase=tr.dataset.ase;renderApv();window.scrollTo(0,0);});
 }
 function renderConcSimple(all){
   const ab=all.filter(s=>s.abierto),c30=cierre30(all),pa=promAb(all);
