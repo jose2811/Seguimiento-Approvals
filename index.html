@@ -127,10 +127,10 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.4.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.5.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
-    <button class="hbtn" id="bImport" hidden>📥 Cargar export</button>
+    <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
     <button class="hbtn" id="bMenu">⋯</button>
   </div>
   <div class="tabs">
@@ -138,6 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
     <button class="tab" data-tab="conc">Concentrado</button>
   </div>
   <div class="menu" id="menu">
+    <button id="mCsv">📤 Exportar a Excel (CSV)</button>
     <button id="mExp">💾 Descargar respaldo (JSON)</button>
     <button id="mSync">🔄 Sincronizar ahora</button>
     <button id="mImp" hidden>📂 Restaurar respaldo (JSON)</button>
@@ -146,7 +147,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
     <button id="mBorrar" style="color:#b91c1c">🚪 Cerrar sesión</button>
   </div>
 </header>
-<input type="file" id="fx" accept=".xlsx" hidden>
+<input type="file" id="fx" accept=".xlsx" multiple hidden>
 <input type="file" id="fj" accept=".json,application/json" hidden>
 
 <main>
@@ -161,7 +162,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.4.4', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.5.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -288,7 +289,7 @@ async function readXlsx(buf){
   const out=[];
   for(const s of sheets){
     const rows=parseSheet(await z.read(s),ss);
-    const h=rows.findIndex(r=>r&&r.some(v=>norm(v)==='solicitudid'));
+    const h=rows.findIndex(r=>r&&r.some(v=>{const n=norm(v);return n==='solicitudid'||n==='solicitud_id';}));
     if(h>=0)out.push({header:rows[h],rows:rows.slice(h+1)});
   }
   if(!out.length)throw new Error('No encontré la columna "SolicitudID" en ninguna hoja');
@@ -358,6 +359,7 @@ async function pull(full){
   for(const r of es){applyEvRow(r);if(!s.e||r.creado>s.e)s.e=r.creado;}
   for(const p of PEND)if(!UIDS.has(p.uid)){(DB.ev[p.id]=DB.ev[p.id]||[]).push(p.e);UIDS.add(p.uid);}
   const cfg=await rest('config?select=*');const ini=(cfg||[]).find(x=>x.k==='inicio');if(ini&&!CFG_DIRTY)DB.cfg.inicio=ini.v||'';
+  const bn=(cfg||[]).find(x=>x.k==='bench');if(bn&&!CFG_DIRTY)DB.cfg.bench=bn.v;
   save();
 }
 async function enviar(tabla,rows,prefer){
@@ -379,7 +381,8 @@ async function flush(){
       await enviar('cuentas?on_conflict=id',ids.map(id=>({id,sucursal:DB.cuentas[id].suc||'SIN SUCURSAL',data:DB.cuentas[id]})),'resolution=merge-duplicates,return=minimal');
       ids.forEach(id=>DIRTY.delete(id));persistQ();
     }
-    if(CFG_DIRTY&&ES_GP()){await rest('config?on_conflict=k',{method:'POST',body:[{k:'inicio',v:DB.cfg.inicio||''}],prefer:'resolution=merge-duplicates,return=minimal'});CFG_DIRTY=false;}
+    if(CFG_DIRTY&&ES_GP()){const body=[{k:'inicio',v:DB.cfg.inicio||''}];if(DB.cfg.bench)body.push({k:'bench',v:DB.cfg.bench});
+      await rest('config?on_conflict=k',{method:'POST',body,prefer:'resolution=merge-duplicates,return=minimal'});CFG_DIRTY=false;}
     if(PEND.length){
       const lote=PEND.slice();
       await enviar('eventos?on_conflict=uid',lote.map(p=>({uid:p.uid,cuenta_id:p.id,data:p.e})),'resolution=ignore-duplicates,return=minimal');
@@ -508,6 +511,71 @@ function importSheet(header,rows,archivo,r){
   }
   return control;
 }
+/* ================= Archivos complementarios: datos duros del sistema ================= */
+const LLEN={a:'No inició',b:'Inició, no terminó',c:'Terminó, no llegó a mesa',d:'En mesa',e:'Desembolsado'};
+const GER_MESA=['Se sube a mesa','En mesa','Por desembolsar'];
+function tipoHoja(header){const H=header.map(norm);
+  if(H.includes('etapa'))return 'control';
+  if(H.includes('segmento llenado datos'))return 'nuevos';
+  if(H.includes('siguiente solicitud'))return 'renov';
+  if(H.includes('solicitudid')&&H.includes('estatus'))return 'funnel';
+  return null;}
+const PRIO={control:0,funnel:1,nuevos:2,renov:3};
+const NOMBRE_TIPO={control:'Control',funnel:'Funnel',nuevos:'Nuevos',renov:'Renovaciones'};
+function enriquece(c,id,x,r){
+  const antes=JSON.stringify(c);
+  if(x.ll)c.ll=x.ll;
+  if(x.ent==='SI')c.anal=1;
+  if(x.des==='SI'&&!/DESEMBOLSADO/i.test(c.est)){
+    sysEv(id,{t:'sis',ts:new Date().toISOString(),f:HOY,por:'Sistema',de:c.est,est:'1) DESEMBOLSADO',fuente:x.fuente},'sis:'+id+':'+norm('1) DESEMBOLSADO'));
+    c.est='1) DESEMBOLSADO';r.desX++;
+  }
+  if(JSON.stringify(c)!==antes){DIRTY.add(id);r.enr++;}
+}
+const idDe=v=>v==null||v===''?'':String(typeof v==='number'?Math.round(v):v).trim();
+function importNuevos(sh,r){
+  const H=sh.header.map(norm),ix=k=>H.indexOf(k);
+  const iId=ix('solicitud_id'),iPre=ix('pre-approval'),iF=ix('fecha'),iEnt=ix('entro a analisis'),iDes=ix('desembolso'),iSeg=ix('segmento llenado datos'),iAse=ix('asesor'),iSuc=ix('sucursal'),iReg=ix('region');
+  if(iId<0||iSeg<0)throw new Error('Archivo de Nuevos sin columnas esperadas');
+  const reg={},jal={};
+  for(const row of sh.rows){
+    if(!row)continue;const id=idDe(row[iId]);if(!/^\d+$/.test(id))continue;r.filas++;
+    const seg=String(row[iSeg]||'').trim(),ll=/^[A-E]\)/i.test(seg)?seg[0].toLowerCase():'';
+    const ent=String(row[iEnt]||'').toUpperCase(),des=String(row[iDes]||'').toUpperCase();
+    const c=DB.cuentas[id];if(c){r.match++;enriquece(c,id,{ll,ent,des,fuente:'Nuevos'},r);}
+    if(String(row[iPre]||'').toUpperCase()==='APROBADO'&&ll){
+      const mes=(toISODate(row[iF])||'').slice(0,7);if(!mes)continue;
+      const rg=String(row[iReg]||'').trim()||'(sin región)',k='abcde'.indexOf(ll);
+      ((reg[rg]=reg[rg]||{})[mes]=reg[rg][mes]||[0,0,0,0,0])[k]++;
+      if(/JALISCO/i.test(rg)){const s=String(row[iSuc]||'').trim(),a=String(row[iAse]||'').trim()||'(sin asesor)';
+        (((jal[s]=jal[s]||{})[a]=jal[s][a]||{})[mes]=jal[s][a][mes]||[0,0,0,0,0])[k]++;}
+    }
+  }
+  DB.cfg.bench={ts:new Date().toISOString(),reg,jal};CFG_DIRTY=true;r.bench=true;
+}
+function importRenov(sh,r){
+  const H=sh.header.map(norm),ix=k=>H.indexOf(k);
+  const iSig=ix('siguiente solicitud'),iEnt=ix('entro a analisis'),iDes=ix('desembolso');
+  if(iSig<0)throw new Error('Archivo de Renovaciones sin columna "Siguiente solicitud"');
+  for(const row of sh.rows){
+    if(!row)continue;const id=idDe(row[iSig]);if(!/^\d+$/.test(id))continue;r.filas++;
+    const c=DB.cuentas[id];if(!c)continue;r.match++;
+    enriquece(c,id,{ent:String(row[iEnt]||'').toUpperCase(),des:String(row[iDes]||'').toUpperCase(),fuente:'Renovaciones'},r);
+  }
+}
+function exportaCSV(){
+  const rows=visibles();HOY=hoyISO();
+  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza'];
+  const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const lines=[cols.join(',')];
+  for(const s of rows){const c=s.c;
+    lines.push([c.id,c.nombre,c.suc,s.asesorAct,c.tipo,(c.seg||'').replace(/^\S+\)\s*/,''),c.fsol,s.dias,(c.est||'').replace(/^\S+\)\s*/,''),c.ll?LLEN[c.ll]:'',s.etapa||'Sin gestión',s.fprog,s.repros||'',s.lastCom,s.lastComF,
+      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:''].map(q).join(','));}
+  const b=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='approvals_'+(VISTA==='GP'?'region':VISTA.replace('CI-','').toLowerCase())+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast('✔ Exportadas '+rows.length+' cuentas. Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
+}
+
 function importFile(sheets,archivo){
   const r=blankR();let control=false;
   if(!DB.cfg)DB.cfg={};
@@ -518,27 +586,32 @@ function importFile(sheets,archivo){
 }
 
 /* Estado derivado de una cuenta: siempre se calcula a partir del historial, nunca se sobrescribe */
+/* Orden real de captura: alta → histórico del Excel → lo capturado en la app/sistema (aunque el Excel traiga fechas futuras) */
+const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
+const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
-  const c=DB.cuentas[id],evs=[...(DB.ev[id]||[])].sort((a,b)=>a.ts.localeCompare(b.ts));
+  const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
-    if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||'';falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa))mesa=true;}
+    const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
+    if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||(e.hist&&e.f>(c.alta||'')?e.f:'');falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa))mesa=true;}
     if(e.mesa)mesa=true;
     if(e.t==='reasig'){reasigs++;asesorPrev=e.de;asesorAct=e.a;fAsig=e.f;}
     if(e.t==='rech'){etapa='Rechazado';rech=e;fprog='';if(e.cat===CAT_MESA)mesa=true;}
     if(e.t==='des'){etapa='Desembolsado';desG=e;fprog='';}
     if(e.monto)monto=e.monto;
-    if(e.por!=='Sistema')lastG=e.f;
-    if(e.com){lastCom=e.com;lastComF=e.f;}
+    if(e.por!=='Sistema')lastG=ef;
+    if(e.com){lastCom=e.com;lastComF=ef;}
   }
-  const sisDes=/DESEMBOLSADO/i.test(c.est),sisMesa=/MESA/i.test(c.est);
+  const sisDes=/DESEMBOLSADO/i.test(c.est),sisMesa=!sisDes&&(/MESA/i.test(c.est)||!!c.anal||c.ll==='d');
   if(sisMesa||sisDes)mesa=true;
   let cierre='';if(sisDes)cierre='des';else if(etapa==='Rechazado')cierre='rech';else if(etapa==='Desembolsado')cierre='desPC';
   asesorAct=asesorAct||c.asesor;
   const dias=c.fsol?dd(c.fsol,HOY):0,diasAs=fAsig?dd(fAsig,HOY):null,sinMov=dd(lastG||c.fsol||c.alta,HOY);
   const venc=!cierre&&fprog&&fprog<HOY,hoyC=!cierre&&fprog===HOY;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
-  return {c,evs,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
+  const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
+  return {c,evs,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>VISTA==='GP'||DB.cuentas[id].suc===VISTA).map(st);}
 
@@ -555,22 +628,37 @@ $('#bMenu').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('on');};
 document.addEventListener('click',()=>$('#menu').classList.remove('on'));
 $('#bImport').onclick=()=>$('#fx').click();
 $('#fx').onchange=async e=>{
-  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const files=[...e.target.files];e.target.value='';if(!files.length)return;
   try{
     if(!ES_GP())throw new Error('Solo el GP carga archivos');
-    toast('Actualizando desde la nube…',20000);
+    toast('Actualizando desde la nube…',30000);
     await sincroniza(false);if(SYNC.estado==='err')throw new Error('Sin conexión: no se puede cargar ahora ('+SYNC.msg+')');
-    toast('Leyendo '+f.name+'…',20000);
-    const sheets=await readXlsx(await f.arrayBuffer());
-    const r=importFile(sheets,f.name);fillVista();render();
-    toast('Subiendo a la nube…',20000);await flush();
+    const lote=[];
+    for(const f of files){toast('Leyendo '+f.name+'…',60000);const sheets=await readXlsx(await f.arrayBuffer());
+      const porTipo={};for(const sh of sheets){const t=tipoHoja(sh.header);if(t)(porTipo[t]=porTipo[t]||[]).push(sh);}
+      const tipos=Object.keys(porTipo);if(!tipos.length)throw new Error(f.name+': no reconozco este archivo');
+      for(const t of tipos)lote.push({t,f,sheets:porTipo[t]});}
+    lote.sort((x,y)=>PRIO[x.t]-PRIO[y.t]);
+    const msgs=[];
+    for(const it of lote){
+      toast('Procesando '+NOMBRE_TIPO[it.t]+'…',60000);await new Promise(r=>setTimeout(r,30));
+      let r;
+      if(it.t==='control'||it.t==='funnel'){r=importFile(it.sheets,it.f.name);
+        msgs.push(r.control?`✔ Control: ${r.acept} cuentas (${r.nuevos} nuevas) · ${r.hist} registros históricos`
+          :`✔ Funnel: ${r.acept} aceptados · ${r.nuevos} nuevos · ${r.act} cambios de estatus${r.viejas?' · '+r.viejas+' anteriores al inicio ignorados':''}`);}
+      else{r={filas:0,match:0,enr:0,desX:0};
+        if(it.t==='nuevos')importNuevos(it.sheets[0],r);else importRenov(it.sheets[0],r);
+        DB.imports.push({ts:new Date().toISOString(),archivo:it.f.name,tipo:it.t,...r});persistQ();save();
+        msgs.push(`✔ ${NOMBRE_TIPO[it.t]}: ${r.match} cuentas cruzadas · ${r.enr} actualizadas${r.desX?' · '+r.desX+' desembolsos confirmados':''}${r.bench?' · comparativo regional actualizado':''}`);}
+      try{await rest('cargas',{method:'POST',body:[{archivo:it.f.name,resumen:{tipo:it.t,...r}}],prefer:'return=minimal'});}catch(_){}
+    }
+    fillVista();render();
+    toast('Subiendo a la nube…',30000);await flush();
     if(SYNC.estado==='err')throw new Error('Se cargó en esta compu pero no se pudo subir. Se reintenta solo. ('+SYNC.msg+')');
-    try{await rest('cargas',{method:'POST',body:[{archivo:f.name,resumen:r}],prefer:'return=minimal'});}catch(_){}
-    toast(r.control
-      ?`✔ Control cargado: ${f.name}\n${r.acept} cuentas (${r.nuevos} nuevas) · ${r.hist} registros históricos${r.histYa?'\n'+r.histYa+' ya estaban cargadas (no se duplican)':''}\nInicio del seguimiento: ${fmt(DB.cfg.inicio)}\n🔒 Columnas de RFC, teléfono, domicilio y buró descartadas`
-      :`✔ ${f.name}\n${r.filas} filas · ${r.acept} aceptados en seguimiento\nNuevos: ${r.nuevos} · Cambios de estatus: ${r.act} (desembolsados ${r.des})${r.viejas?'\n'+r.viejas+' aceptados anteriores al '+fmt(DB.cfg.inicio,false)+' ignorados':''}\n🔒 ${r.ignored} columnas descartadas (RFC, teléfono, domicilio, buró)`,8000);
-  }catch(err){toast('⚠ '+err.message,6000);}
+    toast(msgs.join('\n')+'\n🔒 RFC, teléfono, domicilio, FICO y buró descartados',10000);
+  }catch(err){toast('⚠ '+err.message,7000);}
 };
+$('#mCsv').onclick=exportaCSV;
 $('#mExp').onclick=()=>{
   const b=new Blob([JSON.stringify({app:'seguimiento_aceptados',ver:VER,exportado:new Date().toISOString(),...DB})],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='seguimiento_aceptados_respaldo_'+HOY+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
@@ -610,6 +698,8 @@ const FILTROS=[
   ['f_rep','↻ Reprogramados 2+',s=>s.abierto&&s.repros>=2],
   ['f_sing','Sin gestión',s=>s.sinGestion],
   ['f_30','+30 días',s=>s.abierto&&s.dias>30],
+  ['f_desac','⚠ No cuadra con sistema',s=>s.desac],
+  ['f_noini','Sistema: no inició',s=>s.abierto&&s.c.ll==='a'],
   ['f_reas','↔ Reasignadas',s=>s.reasigs>0],
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
   ['f_cerr','Cerrados',s=>!s.abierto],
@@ -618,7 +708,7 @@ function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vConc').hid
 function renderLista(){
   const all=visibles();
   if(!all.length&&!ES_GP()){$('#vLista').innerHTML=`<div class="empty"><b>Sin cuentas por ahora</b><br>Aquí aparecen los aceptados de tu sucursal en cuanto José carga el funnel.</div>`;return;}
-  if(!all.length){$('#vLista').innerHTML=`<div class="empty"><b>Sin datos todavía</b><br><b>1.</b> Carga tu control (Detalle Region approvals) para arrancar la base.<br><b>2.</b> Después carga cada día el export del funnel tal cual sale.<br>Solo se guardan los aceptados y las columnas de seguimiento.<br><button class="btn" onclick="document.getElementById('fx').click()">📥 Cargar export</button></div>`;return;}
+  if(!all.length){$('#vLista').innerHTML=`<div class="empty"><b>Sin datos todavía</b><br><b>1.</b> Carga tu control (Detalle Region approvals) para arrancar la base.<br><b>2.</b> Después carga cada día el funnel (y si quieres Nuevos y Renovaciones), los 3 de una vez.<br>Solo se guardan los aceptados y las columnas de seguimiento.<br><button class="btn" onclick="document.getElementById('fx').click()">📥 Cargar archivos</button></div>`;return;}
   const ab=all.filter(s=>s.abierto);
   const k={ab:ab.length,a30:ab.filter(s=>s.dias>30).length,venc:ab.filter(s=>s.venc).length,rep:ab.filter(s=>s.repros>=2).length};
   const sucs=[...new Set(all.map(s=>s.c.suc))].sort();
@@ -662,6 +752,8 @@ function estadoPills(s){
   if(s.fprog&&s.abierto)h+=`<span class="pill ${s.venc?'venc':'fok'}">${s.venc?'⚠ vencido ':s.hoyC?'hoy ':''}${fmt(s.fprog)}</span>`;
   if(s.repros)h+=`<span class="pill ${s.repros>=3?'rep3':'rep'}">↻ ${s.repros} ${s.repros===1?'vez':'veces'}</span>`;
   if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
+  else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
+  if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
   if(s.conflicto)h+=`<span class="pill flag">⚠ estaba rechazado</span>`;
   if(s.abierto&&!s.sinGestion&&s.sinMov>=3)h+=`<span class="pill flag">${s.sinMov}d sin mov.</span>`;
   return h;
@@ -700,7 +792,7 @@ function evTxt(e){
 }
 function openDetalle(id){
   CUR=id;const s=st(id),c=s.c;
-  const tl=[...s.evs].sort((a,b)=>a.ts.localeCompare(b.ts)).reverse().map(e=>{const [w,cl]=evTxt(e);return `<li class="${cl}"><div class="when">${e.hist||e.t==='alta'?fmt(e.f):fmtTs(e.ts)} · ${esc(e.por)}</div><div class="what">${esc(w)}</div>${e.com?`<div class="com">${esc(e.com)}</div>`:''}</li>`;}).join('');
+  const tl=[...s.evs].reverse().map(e=>{const [w,cl]=evTxt(e);return `<li class="${cl}"><div class="when">${e.hist?(e.f>(c.alta||'')?'Compromiso '+fmt(e.f):fmt(e.f)):e.t==='alta'?fmt(e.f):fmtTs(e.ts)} · ${esc(e.por)}${e.fuente?' ('+esc(e.fuente)+')':''}</div><div class="what">${esc(w)}</div>${e.com?`<div class="com">${esc(e.com)}</div>`:''}</li>`;}).join('');
   const etOpts=Object.keys(ETAPAS).map(k=>`<option>${k}</option>`).join('');
   const rechCats=Object.keys(RECH).map(k=>`<option>${k}</option>`).join('');
   openSheet(`
@@ -716,6 +808,7 @@ function openDetalle(id){
     <div><span>Necesita referencias</span>${esc(c.refs||'—')}</div>
     <div><span>Estatus en sistema</span>${esc(c.est.replace(/^\S+\)\s*/,''))}</div>
     <div><span>Llegó a mesa</span>${s.mesa?'Sí':'No'}</div>
+    ${c.ll?`<div><span>Llenado (sistema)</span>${LLEN[c.ll]}</div>`:''}
     ${s.monto?`<div><span>Monto aprobado</span>${money(s.monto)}</div>`:''}
     ${c.safi?`<div><span>SafiCreditoID</span>${esc(c.safi)}</div>`:''}
   </div>
@@ -842,6 +935,30 @@ function metr(arr){
   }
   m.rech=m.perfil+m.mesaR+m.cli+m.otro;return m;
 }
+function mesL(m){const [y,mm]=m.split('-');return MES[+mm-1]+' '+y;}
+function benchHTML(){
+  const B=DB.cfg.bench;
+  if(!B||!B.reg)return '<div class="panel"><h3>¿Dónde se atoran los nuevos aprobados?</h3><p class="note">Carga el archivo de Nuevos para ver este panel (dato del sistema, sin captura del gerente).</p></div>';
+  const meses=[...new Set(Object.values(B.reg).flatMap(m=>Object.keys(m)))].sort();
+  if(!C.desde||!meses.includes(C.desde))C.desde=meses[Math.max(0,meses.length-3)];
+  const sum=o=>{const t=[0,0,0,0,0];for(const m in o)if(m>=C.desde)o[m].forEach((v,i)=>t[i]+=v);return t;};
+  const add=(a,b)=>a.map((v,i)=>v+b[i]);
+  const row=(name,t,cls)=>{const n=t.reduce((a,b)=>a+b,0),p=i=>n?Math.round(t[i]*100/n)+'%':'—';
+    return `<tr class="${cls||''}"><td>${esc(name)}</td><td>${n}</td><td class="${n&&t[0]/n>=.3?'hb':''}">${p(0)}</td><td class="${n&&t[1]/n>=.3?'hw':''}">${p(1)}</td><td>${p(2)}</td><td>${p(3)}</td><td><b>${p(4)}</b></td></tr>`;};
+  const head='<tr><th></th><th>Aprob.</th><th title="No inició la solicitud">No inició</th><th title="Inició, no terminó">Inició</th><th title="Terminó, no llegó a mesa">Terminó</th><th>Mesa</th><th>Desemb.</th></tr>';
+  const pd=t=>{const n=t.reduce((a,b)=>a+b,0);return n?t[4]/n:0;};
+  const regs=Object.keys(B.reg).map(k=>({k,t:sum(B.reg[k])})).filter(x=>x.t.some(v=>v)).sort((a,b)=>pd(b.t)-pd(a.t));
+  const sucs=Object.keys(B.jal||{}).filter(k=>VISTA==='GP'||k===VISTA).sort();
+  const sucT=sucs.map(k=>{let t=[0,0,0,0,0];for(const a in B.jal[k])t=add(t,sum(B.jal[k][a]));return {k,t};});
+  const ases=[];sucs.forEach(k=>{for(const a in B.jal[k]){const t=sum(B.jal[k][a]);const n=t.reduce((x,y)=>x+y,0);if(n>=3)ases.push({k:a,suc:k,t,n});}});
+  ases.sort((a,b)=>(b.t[0]/b.n)-(a.t[0]/a.n)||b.n-a.n);
+  return `<div class="panel"><h3>¿Dónde se atoran los nuevos aprobados? <small class="note">dato del sistema</small></h3>
+  <div class="frow"><select id="cDesde">${meses.map(m=>`<option value="${m}" ${m===C.desde?'selected':''}>Desde ${mesL(m)}</option>`).join('')}</select></div>
+  <h4>Jalisco vs otras regiones</h4><div class="tw"><table>${head}${regs.map(x=>row(x.k,x.t,/JALISCO/i.test(x.k)?'tot':'')).join('')}</table></div>
+  <h4>Por sucursal</h4><div class="tw"><table>${head}${sucT.map(x=>row(x.k.replace('CI-',''),x.t)).join('')}</table></div>
+  <details style="margin-top:8px"><summary style="font-size:13px">Por asesor (${ases.length}) — ordenado por % que no inició</summary><div class="tw" style="margin-top:6px"><table>${head.replace('<th></th>','<th>Asesor</th>')}${ases.map(x=>row(x.k+(VISTA==='GP'?' · '+x.suc.replace('CI-',''):''),x.t)).join('')}</table></div></details>
+  <p class="note"><b>Inició</b> = inició y no terminó la solicitud · <b>Terminó</b> = terminó y no llegó a mesa. Solo nuevos con pre-approval aprobado. "No inició" alto = approvals que se pidieron y el cliente nunca arrancó la solicitud. Actualizado ${fmtTs(B.ts)}.</p></div>`;
+}
 function renderConc(){
   const all0=visibles();
   if(!all0.length){$('#vConc').innerHTML='<div class="empty">Carga primero el export del funnel.</div>';return;}
@@ -872,6 +989,7 @@ function renderConc(){
   </table></div>
   <p class="note">Por asesor se cuenta con el asesor actual (después de reasignar). <b>↔ Quitadas</b> = cuentas que se le reasignaron a otro.</p>
   <p class="note"><b>Perfil</b> = rechazado por gerente/asesor (no cumplía el perfil: ¿para qué se pidió el approval?). <b>Venc.</b> = fecha compromiso ya pasada. ${T.sinMesa?`<b>${T.sinMesa}</b> rechazos sin llegar a mesa.`:''}${T.desPC?` <b>${T.desPC}</b> desembolsos por confirmar en sistema.`:''}${T.conf?` <b style="color:var(--bad)">${T.conf}</b> cuentas rechazadas que el sistema marca desembolsadas.`:''}${T.sc?` <b>${T.sc}</b> rechazos históricos sin motivo especificado.`:''}</p></div>
+  ${benchHTML()}
   <div class="panel"><h3>Por segmento</h3><div class="tw"><table><tr><th></th><th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Perfil</th><th>Abiertos</th></tr>${segRows}</table></div></div>
   <div class="panel"><h3>Motivos de rechazo</h3>${motA.length?`<div class="bars">${motA.slice(0,12).map(([k,n])=>`<div class="b"><span class="l" title="${esc(k)}">${esc(k)}</span><span class="t"><i style="width:${n*100/motMax}%;background:${/\(/.test(k)?'#94a3b8':'#d97706'}"></i></span><span class="n">${n}</span></div>`).join('')}</div><p class="note">Naranja = perfil (gerente/asesor) · Gris = mesa / cliente / otro</p>`:'<p class="note">Aún no hay rechazos capturados.</p>'}</div>
   <div class="panel"><details ${VISTA!=='GP'?'open':''}><summary>Por asesor (${ases.length})</summary><div class="tw" style="margin-top:8px"><table>
@@ -879,6 +997,7 @@ function renderConc(){
     ${ases.map(a=>`<tr><td>${esc(a.k)}</td>${VISTA==='GP'?`<td>${esc(a.suc.replace('CI-',''))}</td>`:''}<td>${a.m.acept}</td><td>${a.m.des}</td><td>${pct(a.m.des,a.m.acept)}</td><td class="${a.m.perfil?'hw':''}">${a.m.perfil}</td><td class="${a.m.acept&&a.m.perfil/a.m.acept>=.2?'hb':''}">${pct(a.m.perfil,a.m.acept)}</td><td>${a.m.ab}</td><td class="${a.m.a30?'hb':''}">${a.m.a30}</td><td class="${a.q?'hw':''}">${a.q}</td></tr>`).join('')}
   </table></div></details></div>`;
   $('#cSem').onchange=e=>{C.sem=e.target.value;renderConc();};
+  const cd=$('#cDesde');if(cd)cd.onchange=e=>{C.desde=e.target.value;renderConc();};
 }
 
 reindex();fillVista();
