@@ -129,7 +129,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.6.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.6.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -166,7 +166,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.6.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.6.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -660,7 +660,7 @@ const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
 const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
   const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
-  let open=null;const cal=[],calU={};
+  let open=null;const cal=[],calU={};let reacs=0,rechPrev='';
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
     const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
@@ -678,8 +678,9 @@ function st(id){
     if(e.mesa)mesa=true;
     if(e.t==='reasig'){reasigs++;asesorPrev=e.de;asesorAct=e.a;fAsig=e.f;}
     if(e.t==='rech'){etapa='Rechazado';rech=e;fprog='';if(e.cat===CAT_MESA)mesa=true;}
+    if(e.t==='reac'){etapa=e.etapa;fprog=e.fprog||'';rech=null;reacs++;rechPrev=e.antes||rechPrev;}
     if(e.t==='des'){etapa='Desembolsado';desG=e;fprog='';}
-    if((e.t==='etapa'||e.t==='repro')&&fprog)open={etapa,fprog};else if(e.t==='des'||e.t==='rech'||sisDesEv)open=null;
+    if((e.t==='etapa'||e.t==='repro'||e.t==='reac')&&fprog)open={etapa,fprog};else if(e.t==='des'||e.t==='rech'||sisDesEv)open=null;
     if(e.monto)monto=e.monto;
     if(e.por!=='Sistema')lastG=ef;
     if(e.com){lastCom=e.com;lastComF=ef;}
@@ -693,7 +694,7 @@ function st(id){
   const incum=cal.filter(x=>x.res==='incumplido').length;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
   const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
-  return {c,evs,cal,calU,incum,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
+  return {c,evs,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>VISTA==='GP'||DB.cuentas[id].suc===VISTA).map(st);}
 
@@ -797,6 +798,7 @@ const FILTROS=[
   ['f_desac','⚠ No cuadra con sistema',s=>s.desac],
   ['f_noini','Sistema: no inició',s=>s.abierto&&s.c.ll==='a'],
   ['f_incum','✖ Con incumplidos',s=>s.abierto&&s.incum>0],
+  ['f_sinmot','Rechazados sin motivo',s=>s.cierre==='rech'&&s.rech.cat===CAT_SC],
   ['f_reas','↔ Reasignadas',s=>s.reasigs>0],
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
   ['f_cerr','Cerrados',s=>!s.abierto],
@@ -851,6 +853,7 @@ function estadoPills(s){
   if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
   else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
   if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
+  if(s.reacs)h+=`<span class="pill rea">↺ reactivada${s.reacs>1?' '+s.reacs+'×':''}</span>`;
   if(s.c.forzado)h+=`<span class="pill flag">➕ agregado por ID</span>`;
   if(s.incum)h+=`<span class="pill ${s.incum>=2?'rep3':'rep'}">✖ ${s.incum} incumplido${s.incum>1?'s':''}</span>`;
   if(s.conflicto)h+=`<span class="pill flag">⚠ estaba rechazado</span>`;
@@ -886,6 +889,7 @@ function evTxt(e){
     case 'com':return ['💬 Comentario','g'];
     case 'reasig':return ['↔ Reasigna: '+e.de+' → '+e.a+' · '+e.motivo,'r'];
     case 'rech':return ['✖ Rechazado · '+e.cat+': '+e.motivo,'x'];
+    case 'reac':return ['↺ Reactivada → '+e.etapa+(e.fprog?' '+fmt(e.fprog):'')+(e.antes?' · estaba rechazada: '+e.antes:''),'g'];
     case 'des':return ['✔ Desembolsado'+(e.monto?' · '+money(e.monto):''),'ok'];
   }return [e.t,''];
 }
@@ -919,7 +923,7 @@ function openDetalle(id){
     <button class="btn sec" data-f="reas">↔ Reasignar</button>
     <button class="btn green" data-f="des">✔ Desembolsado</button>
     <button class="btn red" data-f="rech">✖ Rechazar</button>
-  </div>`:`<div class="acts"><button class="btn sec" data-f="com">💬 Agregar comentario</button></div>`}
+  </div>`:`<div class="acts"><button class="btn sec" data-f="com">💬 Agregar comentario</button>${s.cierre==='rech'?`<button class="btn" data-f="reac">↺ Reactivar</button>${s.rech.cat===CAT_SC?'<button class="btn red" data-f="rech">✎ Poner motivo</button>':''}`:''}</div>`}
 
   <div class="form" id="f-etapa">
     <label>Siguiente paso</label><select id="e_etapa">${etOpts}</select>
@@ -956,11 +960,19 @@ function openDetalle(id){
     <div class="err" id="d_err"></div>
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn green" id="d_ok">Confirmar desembolso</button></div>
   </div>
+  <div class="form" id="f-reac">
+    <div class="note">Estaba rechazada${s.rech?': <b>'+esc(s.rech.motivo)+'</b>':''}. El rechazo queda en el historial.</div>
+    <label>Nueva etapa</label><select id="v_etapa">${etOpts}</select>
+    <div id="v_fechaW"><label id="v_fechaL">Fecha compromiso</label><input type="date" id="v_fecha" min="${HOY}" value="${addDays(HOY,1)}"></div>
+    <label>¿Por qué se reactiva? (obligatorio)</label><textarea id="v_com" placeholder="Ej. el cliente sí tiene negocio; se vuelve a visitar con el gerente"></textarea>
+    <div class="err" id="v_err"></div>
+    <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="v_ok">Reactivar</button></div>
+  </div>
   <div class="form" id="f-rech">
     <label>¿Quién rechaza?</label><select id="x_cat">${rechCats}</select>
     <label>Motivo</label><select id="x_mot"></select>
     <label>Comentario <span id="x_req"></span></label><textarea id="x_com"></textarea>
-    <div class="note">El rechazo es definitivo y no se puede editar.</div>
+    <div class="note">Queda en el historial. Si después se recupera, se puede reactivar.</div>
     <div class="err" id="x_err"></div>
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn red" id="x_ok">Rechazar cuenta</button></div>
   </div>
@@ -1012,14 +1024,26 @@ function openDetalle(id){
   $('#d_ok')&&($('#d_ok').onclick=()=>{const m=+$('#d_monto').value||0,com=$('#d_com').value.trim();if(m<0)return $('#d_err').textContent='Monto inválido';const e={t:'des'};if(m)e.monto=m;if(com)e.com=com;addEv(id,e);done('✔ Desembolsado');});
   // rechazo
   const syncX=()=>{$('#x_mot').innerHTML='<option value="">— Selecciona —</option>'+RECH[$('#x_cat').value].map(x=>`<option>${x}</option>`).join('');syncX2();};
-  const syncX2=()=>{$('#x_req').textContent=$('#x_mot').value==='Otro'?'(obligatorio)':'(opcional)';};
+  const syncX2=()=>{$('#x_req').textContent='(obligatorio: qué pasó)';};
   if($('#x_cat')){$('#x_cat').onchange=syncX;$('#x_mot').onchange=syncX2;syncX();}
   $('#x_ok')&&($('#x_ok').onclick=()=>{
     const cat=$('#x_cat').value,m=$('#x_mot').value,com=$('#x_com').value.trim();
     if(!m)return $('#x_err').textContent='Selecciona el motivo';
-    if(m==='Otro'&&!com)return $('#x_err').textContent='Explica el motivo en el comentario';
+    if(com.length<10)return $('#x_err').textContent='Explica qué pasó con el cliente (mínimo 10 caracteres)';
     const e={t:'rech',cat,motivo:m,llegoMesa:s.mesa||cat===CAT_MESA};if(com)e.com=com;addEv(id,e);done('Cuenta rechazada');
   });
+  // reactivar
+  if($('#v_ok')){
+    const syncV=()=>{const cfg=ETAPAS[$('#v_etapa').value];$('#v_fechaW').hidden=cfg.fecha==='no';$('#v_fechaL').textContent=cfg.fecha==='req'?'Fecha compromiso':'Fecha compromiso (opcional)';};
+    $('#v_etapa').onchange=syncV;syncV();
+    $('#v_ok').onclick=()=>{
+      const etapa=$('#v_etapa').value,cfg=ETAPAS[etapa],fecha=cfg.fecha==='no'?'':$('#v_fecha').value,com=$('#v_com').value.trim();
+      if(cfg.fecha==='req'&&!fecha)return $('#v_err').textContent='Pon la fecha compromiso';
+      if(fecha&&fecha<HOY)return $('#v_err').textContent='La fecha no puede ser pasada';
+      if(com.length<10)return $('#v_err').textContent='Explica por qué se reactiva (mínimo 10 caracteres)';
+      addEv(id,{t:'reac',etapa,fprog:fecha,com,antes:s.rech?s.rech.motivo:''});done('↺ Cuenta reactivada');
+    };
+  }
   function done(msg){toast('✔ '+msg);render();openDetalle(id);}
 }
 
