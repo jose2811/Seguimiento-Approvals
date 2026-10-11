@@ -48,6 +48,10 @@ main{padding:10px 10px 40px;max-width:900px;margin:0 auto}
 .days b{display:block;font-size:22px;line-height:1}
 .days span{font-size:10px;color:var(--mut);display:block}
 .days .tot{margin-top:3px;font-weight:600;color:#475569}
+.fchip.ase{font-weight:600}
+.fchip.ase .pend{display:inline-block;min-width:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;padding:0 5px;margin-left:3px;text-align:center}
+.fchip.ase.on .pend{background:#fff;color:var(--bad)}
+h4.secc{margin:12px 2px 6px;font-size:12px;color:#334155;text-transform:none;letter-spacing:0}
 .pill.req{background:transparent;color:#c0c6cf;border:1px solid #e5e7eb;font-weight:500}
 .pill.req.on{background:#fff7ed;color:#c2410c;border-color:#fdba74;font-weight:700}
 .pill.rea{background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc}
@@ -131,7 +135,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.7.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.8.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -168,7 +172,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.7.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.8.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -804,6 +808,7 @@ const FILTROS=[
   ['f_hoy','Compromiso hoy',s=>s.hoyC],
   ['f_rep','↻ Reprogramados 2+',s=>s.abierto&&s.repros>=2],
   ['f_sing','Sin gestión',s=>s.sinGestion],
+  ['f_15','Rezagados 15+ días',s=>s.abierto&&s.dias>=15],
   ['f_30','+30 días',s=>s.abierto&&s.dias>30],
   ['f_desac','⚠ No cuadra con sistema',s=>s.desac],
   ['f_noini','Sistema: no inició',s=>s.abierto&&s.c.ll==='a'],
@@ -829,6 +834,17 @@ function renderLista(){
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
   const shown=list.slice(0,300);
+  const corto=n=>{const t=String(n||'').trim().split(/\s+/);if(t.length<2)return tc(t[0]||'');return tc(t[0])+' '+tc(t.length>=4?t[2]:t[1]);};
+  const pend=a=>a.filter(s=>s.abierto&&(s.venc||s.hoyC||s.sinGestion)).length;
+  const verChips=VISTA!=='GP'||!!F.suc;
+  const chipsAse=verChips?`<div class="filters ases">${['',...asesores.filter(a=>a===F.asesor||base.some(s=>s.asesorAct===a&&fn(s))).sort((x,y)=>pend(base.filter(s=>s.asesorAct===y))-pend(base.filter(s=>s.asesorAct===x))||x.localeCompare(y))].map(a=>{const sub=a?base.filter(s=>s.asesorAct===a):base;const n=pend(sub);
+    return `<button class="fchip ase ${F.asesor===a?'on':''}" data-a="${esc(a)}" title="${esc(a||'Todos')}">${a?esc(corto(a)):'Todos'} ${n?`<span class="pend">${n}</span>`:''}</button>`;}).join('')}</div>`:'';
+  const SECC=[['⚠ Compromisos vencidos — ¿qué pasó?',s=>s.venc],['📅 Compromisos de hoy',s=>s.hoyC],['Sin gestión — ¿qué sigue y cuándo?',s=>s.sinGestion],['Próximos compromisos',s=>s.fprog&&s.fprog>HOY],['Abiertas sin fecha',()=>true]];
+  let cuerpo;
+  if(F.q==='f_abiertos'){const usado=new Set();cuerpo=SECC.map(([t,f])=>{const g=shown.filter(s=>!usado.has(s.c.id)&&f(s));g.forEach(s=>usado.add(s.c.id));
+      if(f===SECC[2][1]||t.startsWith('Próximos'))g.sort((a,b)=>(a.fprog||'').localeCompare(b.fprog||'')||(b.dias-a.dias));
+      return g.length?`<h4 class="secc">${t} <small>(${g.length})</small></h4>`+g.map(card).join(''):'';}).join('');}
+  else cuerpo=shown.map(card).join('');
   $('#vLista').innerHTML=`
   ${SIMPLE()?`<div class="kpis">
     <div class="kpi" data-q="f_abiertos"><b>${k.ab}</b><span>Abiertos</span></div>
@@ -845,12 +861,14 @@ function renderLista(){
   <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${VISTA==='GP'?`<select id="fSuc"><option value="">Todas las sucursales</option>${sucs.map(x=>`<option ${F.suc===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
-    <select id="fAse"><option value="">Todos los asesores</option>${asesores.map(x=>`<option ${F.asesor===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+    ${verChips?'':`<select id="fAse"><option value="">Todos los asesores</option>${asesores.map(x=>`<option ${F.asesor===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`}
     ${SIMPLE()?'':`<select id="fSeg"><option value="">A / B / C</option>${['A','B','C'].map(x=>`<option ${F.seg===x?'selected':''} value="${x}">Aceptado ${x}</option>`).join('')}</select>`}
     <input id="fTxt" placeholder="Buscar nombre o ID" value="${esc(F.txt)}">
   </div>
-  <div class="count">${list.length} cuenta${list.length===1?'':'s'}${list.length>300?' · mostrando 300':''}</div>
-  ${shown.map(card).join('')||'<div class="empty">Nada en este filtro 👍</div>'}`;
+  ${chipsAse}
+  <div class="count">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>300?' · mostrando 300':''}</div>
+  ${cuerpo||'<div class="empty">Nada en este filtro 👍</div>'}`;
+  document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{F.asesor=b.dataset.a;renderLista();});
   document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.q=b.dataset.q;renderLista();});
   const on=(sel,k)=>{const el=$(sel);if(el)el.onchange=e=>{F[k]=e.target.value;renderLista();};};
   on('#fSuc','suc');on('#fAse','asesor');on('#fSeg','seg');
