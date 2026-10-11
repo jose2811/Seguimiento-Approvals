@@ -131,7 +131,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.7.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.7.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -168,7 +168,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.7.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.7.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -356,7 +356,9 @@ async function getAll(tabla,filtro,orden){
 }
 function applyEvRow(row){if(UIDS.has(row.uid))return;const e={...row.data,uid:row.uid};(DB.ev[row.cuenta_id]=DB.ev[row.cuenta_id]||[]).push(e);UIDS.add(row.uid);}
 async function pull(full){
-  DB.sync=DB.sync||{};const s=DB.sync;
+  DB.sync=DB.sync||{};let s=DB.sync;
+  const ep=((await rest('config?select=v&k=eq.epoch'))||[])[0];const epoch=ep?String(ep.v):'';
+  if(epoch&&s.epoch!==epoch){const keep={owner:DB.owner};DB=blank();DB.owner=keep.owner;DB.sync={epoch};s=DB.sync;PEND=[];DIRTY=new Set();persistQ();UIDS=new Set();VIEJAS={};lsSet('segAceptados_viejas',null);full=true;}
   const over=t=>new Date(Date.parse(t)-120000).toISOString();
   if(full||!s.c){DB.cuentas={};DB.ev={};UIDS=new Set();s.c='';s.e='';}
   const cs=await getAll('cuentas',s.c?'&actualizado=gt.'+encodeURIComponent(over(s.c)):'','actualizado.asc,id.asc');
