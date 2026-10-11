@@ -127,7 +127,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.5.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.5.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -139,6 +139,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
   </div>
   <div class="menu" id="menu">
     <button id="mCsv">📤 Exportar a Excel (CSV)</button>
+    <button id="mVer" hidden>🟢 Llenar archivo VERDES</button>
     <button id="mExp">💾 Descargar respaldo (JSON)</button>
     <button id="mSync">🔄 Sincronizar ahora</button>
     <button id="mImp" hidden>📂 Restaurar respaldo (JSON)</button>
@@ -162,7 +163,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.5.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.5.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -434,7 +435,7 @@ function aplicaPerfil(){
   const gp=ES_GP();
   if(!gp&&PERFIL()){VISTA=PERFIL().sucursal;}
   $('#vista').hidden=!gp;$('#bImport').hidden=!gp;
-  ['mImp','mIni','mHist'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
+  ['mImp','mIni','mHist','mVer'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
   $('#who').textContent=PERFIL()?PERFIL().nombre:'';
   pintaSync();
 }
@@ -515,6 +516,7 @@ function importSheet(header,rows,archivo,r){
 const LLEN={a:'No inició',b:'Inició, no terminó',c:'Terminó, no llegó a mesa',d:'En mesa',e:'Desembolsado'};
 const GER_MESA=['Se sube a mesa','En mesa','Por desembolsar'];
 function tipoHoja(header){const H=header.map(norm);
+  if(H.includes('porque no se envio a mesa ?'))return 'verdes';
   if(H.includes('etapa'))return 'control';
   if(H.includes('segmento llenado datos'))return 'nuevos';
   if(H.includes('siguiente solicitud'))return 'renov';
@@ -574,6 +576,49 @@ function exportaCSV(){
   const b=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='approvals_'+(VISTA==='GP'?'region':VISTA.replace('CI-','').toLowerCase())+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   toast('✔ Exportadas '+rows.length+' cuentas. Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
+}
+
+/* ================= Archivo VERDES de la empresa: llenar "Porque no se envio a mesa ?" y "STATUS" ================= */
+function statusVerdes(s){
+  if(s.cierre==='des'||s.cierre==='desPC')return 'DESEMBOLSADO';
+  if(s.cierre==='rech'){const r=s.rech,m=r.motivo||'';
+    if(/Historial|Buró/i.test(m))return 'MAL HISTORIAL CREDITICIO';
+    if(/Tasa|monto/i.test(m))return 'MODELO DE PRECIO';
+    if(/aval/i.test(m))return 'AVAL';
+    if(r.cat===CAT_PERFIL)return 'PERFIL DEL CLIENTE';
+    return 'NO CALIFICADO';}
+  if(s.sisMesa||GER_MESA.includes(s.etapa))return 'SE ENVIARA A MESA DE ANALISIS';
+  if(/aval/i.test(s.lastCom||''))return 'AVAL';
+  return 'EN SEGUIMIENTO';
+}
+function textoVerdes(s){
+  if(s.cierre==='des')return 'Desembolsado'+(s.c.fdes?' '+fmt(s.c.fdes,false):'');
+  if(s.cierre==='desPC')return 'Desembolsado (por confirmar en sistema)';
+  const com=s.lastCom&&s.lastCom!=='(sin comentario)'?s.lastCom:'';
+  if(s.cierre==='rech'){const m=s.rech.motivo&&s.rech.motivo!=='Sin motivo especificado'?s.rech.motivo:'';
+    const cm=com&&!/^rechaz\w*\.?$/i.test(com.trim())&&!norm(m).includes(norm(com))?com:'';
+    return m?(m+(cm?' – '+cm:'')):(cm?'Rechazado – '+cm:'Rechazado (sin motivo capturado)');}
+  const et=s.etapa?s.etapa+(s.fprog?' '+fmt(s.fprog,false):''):'Sin gestión';
+  return et+(com?' – '+com:'');
+}
+function llenaVerdes(sheets,archivo){
+  // la hoja con mayor proporción de filas de Jalisco (su pestaña JALISCO); no se guarda nada del archivo
+  let best=null;
+  for(const sh of sheets){const H=sh.header.map(norm),iR=H.indexOf('region'),iId=H.indexOf('solicitud_id');if(iId<0)continue;
+    const rows=sh.rows.filter(r=>r&&/^\d+$/.test(idDe(r[iId])));const jal=rows.filter(r=>/JALISCO/i.test(String(r[iR]||'')));
+    const sc=rows.length?jal.length/rows.length:0;if(jal.length&&(!best||sc>best.sc||(sc===best.sc&&jal.length>best.n)))best={sh,rows,sc,n:jal.length,iId,iR};}
+  if(!best)throw new Error('No encontré filas de Jalisco en el archivo VERDES');
+  const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const out=['Solicitud_id,Porque no se envio a mesa ?,STATUS,Cliente (app),Fuente'];let ok=0,sin=0,des=0;
+  for(const r of best.rows){const id=idDe(r[best.iId]);
+    if(best.sc<1&&!/JALISCO/i.test(String(r[best.iR]||'')))continue;
+    if(DB.cuentas[id]){const s=st(id);const stt=statusVerdes(s);if(stt==='DESEMBOLSADO')des++;ok++;
+      out.push([id,textoVerdes(s),stt,s.c.nombre,'App'].map(q).join(','));}
+    else{sin++;out.push([id,'','','','Sin dato en la app'].map(q).join(','));}
+  }
+  const b=new Blob(['﻿'+out.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='VERDES_JALISCO_llenado_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  return {ok,sin,des,total:ok+sin};
 }
 
 function importFile(sheets,archivo){
@@ -637,6 +682,9 @@ $('#fx').onchange=async e=>{
     for(const f of files){toast('Leyendo '+f.name+'…',60000);const sheets=await readXlsx(await f.arrayBuffer());
       const porTipo={};for(const sh of sheets){const t=tipoHoja(sh.header);if(t)(porTipo[t]=porTipo[t]||[]).push(sh);}
       const tipos=Object.keys(porTipo);if(!tipos.length)throw new Error(f.name+': no reconozco este archivo');
+      if(porTipo.verdes){const v=llenaVerdes(sheets,f.name);
+        toast(`✔ VERDES: ${v.total} filas de Jalisco, en el mismo orden de su hoja\n${v.ok} llenadas desde la app (${v.des} ya desembolsadas) · ${v.sin} sin dato\nCopia las columnas B y C del CSV y pégalas en "Porque no se envio a mesa ?" y "STATUS". Revisa que el Solicitud_id coincida.\n(El archivo VERDES no se guarda en la app)`,15000);
+        if(files.length===1)return;continue;}
       for(const t of tipos)lote.push({t,f,sheets:porTipo[t]});}
     lote.sort((x,y)=>PRIO[x.t]-PRIO[y.t]);
     const msgs=[];
@@ -659,6 +707,7 @@ $('#fx').onchange=async e=>{
   }catch(err){toast('⚠ '+err.message,7000);}
 };
 $('#mCsv').onclick=exportaCSV;
+$('#mVer').onclick=()=>$('#fx').click();
 $('#mExp').onclick=()=>{
   const b=new Blob([JSON.stringify({app:'seguimiento_aceptados',ver:VER,exportado:new Date().toISOString(),...DB})],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='seguimiento_aceptados_respaldo_'+HOY+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
