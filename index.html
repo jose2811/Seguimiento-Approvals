@@ -92,6 +92,8 @@ main{padding:10px 10px 40px;max-width:900px;margin:0 auto}
 .tl li{position:relative;padding:0 0 10px 14px}
 .tl li::before{content:"";position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:#cbd5e1}
 .tl li.g::before{background:var(--pri2)}.tl li.r::before{background:var(--warn)}.tl li.x::before{background:var(--bad)}.tl li.ok::before{background:var(--ok)}
+.tl .calif{display:inline-block;font-size:11px;font-weight:700;border-radius:8px;padding:1px 7px;margin-bottom:2px}
+.cal-cumplido{background:var(--okb);color:var(--ok)}.cal-tarde{background:var(--warnb);color:var(--warn)}.cal-atiempo{background:var(--chip);color:#334155}.cal-incumplido{background:var(--badb);color:var(--bad)}
 .tl .when{font-size:11px;color:var(--mut)}
 .tl .what{font-weight:600;font-size:13px}
 .tl .com{font-size:12px;color:#374151;background:#f9fafb;border-radius:6px;padding:4px 6px;margin-top:3px}
@@ -127,7 +129,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.5.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.6.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -163,7 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.5.3', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.6.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -640,14 +642,26 @@ const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
 const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
   const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
+  let open=null;const cal=[],calU={};
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
     const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
+    // ¿Este movimiento resuelve el compromiso abierto? (solo se califica lo capturado en la app o el desembolso del sistema)
+    const sisDesEv=e.t==='sis'&&/DESEMB/i.test(e.est||'');
+    if(open&&(e.t==='etapa'||e.t==='repro'||e.t==='des'||e.t==='rech'||sisDesEv)){
+      if(!e.hist){let res;
+        if(e.t==='repro'||(e.t==='etapa'&&e.etapa==='Reagendado'))res=ef<=open.fprog?'atiempo':'incumplido';
+        else if(e.t==='rech')res='';
+        else if(sisDesEv)res=dd(open.fprog,ef)<=1?'cumplido':'tarde';
+        else res=ef<=open.fprog?'cumplido':'tarde';
+        if(res){const x={res,f:ef,fprog:open.fprog,etapa:open.etapa,dias:dd(open.fprog,ef)};cal.push(x);calU[e.uid||e.ts]=x;}}
+      open=null;}
     if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||(e.hist&&e.f>(c.alta||'')?e.f:'');falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa))mesa=true;}
     if(e.mesa)mesa=true;
     if(e.t==='reasig'){reasigs++;asesorPrev=e.de;asesorAct=e.a;fAsig=e.f;}
     if(e.t==='rech'){etapa='Rechazado';rech=e;fprog='';if(e.cat===CAT_MESA)mesa=true;}
     if(e.t==='des'){etapa='Desembolsado';desG=e;fprog='';}
+    if((e.t==='etapa'||e.t==='repro')&&fprog)open={etapa,fprog};else if(e.t==='des'||e.t==='rech'||sisDesEv)open=null;
     if(e.monto)monto=e.monto;
     if(e.por!=='Sistema')lastG=ef;
     if(e.com){lastCom=e.com;lastComF=ef;}
@@ -658,9 +672,10 @@ function st(id){
   asesorAct=asesorAct||c.asesor;
   const dias=c.fsol?dd(c.fsol,HOY):0,diasAs=fAsig?dd(fAsig,HOY):null,sinMov=dd(lastG||c.fsol||c.alta,HOY);
   const venc=!cierre&&fprog&&fprog<HOY,hoyC=!cierre&&fprog===HOY;
+  const incum=cal.filter(x=>x.res==='incumplido').length;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
   const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
-  return {c,evs,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
+  return {c,evs,cal,calU,incum,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>VISTA==='GP'||DB.cuentas[id].suc===VISTA).map(st);}
 
@@ -753,6 +768,7 @@ const FILTROS=[
   ['f_30','+30 días',s=>s.abierto&&s.dias>30],
   ['f_desac','⚠ No cuadra con sistema',s=>s.desac],
   ['f_noini','Sistema: no inició',s=>s.abierto&&s.c.ll==='a'],
+  ['f_incum','✖ Con incumplidos',s=>s.abierto&&s.incum>0],
   ['f_reas','↔ Reasignadas',s=>s.reasigs>0],
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
   ['f_cerr','Cerrados',s=>!s.abierto],
@@ -807,6 +823,7 @@ function estadoPills(s){
   if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
   else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
   if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
+  if(s.incum)h+=`<span class="pill ${s.incum>=2?'rep3':'rep'}">✖ ${s.incum} incumplido${s.incum>1?'s':''}</span>`;
   if(s.conflicto)h+=`<span class="pill flag">⚠ estaba rechazado</span>`;
   if(s.abierto&&!s.sinGestion&&s.sinMov>=3)h+=`<span class="pill flag">${s.sinMov}d sin mov.</span>`;
   return h;
@@ -845,7 +862,8 @@ function evTxt(e){
 }
 function openDetalle(id){
   CUR=id;const s=st(id),c=s.c;
-  const tl=[...s.evs].reverse().map(e=>{const [w,cl]=evTxt(e);return `<li class="${cl}"><div class="when">${e.hist?(e.f>(c.alta||'')?'Compromiso '+fmt(e.f):fmt(e.f)):e.t==='alta'?fmt(e.f):fmtTs(e.ts)} · ${esc(e.por)}${e.fuente?' ('+esc(e.fuente)+')':''}</div><div class="what">${esc(w)}</div>${e.com?`<div class="com">${esc(e.com)}</div>`:''}</li>`;}).join('');
+  const CAL_TXT={cumplido:x=>'✔ Compromiso cumplido',tarde:x=>'Compromiso cumplido tarde (+'+x.dias+' d)',atiempo:x=>'Reprogramado a tiempo',incumplido:x=>'✖ Compromiso incumplido (vencía '+fmt(x.fprog,false)+')'};
+  const tl=[...s.evs].reverse().map(e=>{const [w,cl]=evTxt(e);const k=s.calU[e.uid||e.ts];return `<li class="${cl}">${k?`<div class="calif cal-${k.res}">${CAL_TXT[k.res](k)}</div>`:''}<div class="when">${e.hist?(e.f>(c.alta||'')?'Compromiso '+fmt(e.f):fmt(e.f)):e.t==='alta'?fmt(e.f):fmtTs(e.ts)} · ${esc(e.por)}${e.fuente?' ('+esc(e.fuente)+')':''}</div><div class="what">${esc(w)}</div>${e.com?`<div class="com">${esc(e.com)}</div>`:''}</li>`;}).join('');
   const etOpts=Object.keys(ETAPAS).map(k=>`<option>${k}</option>`).join('');
   const rechCats=Object.keys(RECH).map(k=>`<option>${k}</option>`).join('');
   openSheet(`
@@ -989,6 +1007,23 @@ function metr(arr){
   m.rech=m.perfil+m.mesaR+m.cli+m.otro;return m;
 }
 function mesL(m){const [y,mm]=m.split('-');return MES[+mm-1]+' '+y;}
+function compHTML(all){
+  const P={'7':7,'30':30,'all':99999};C.cper=C.cper||'30';const desde=addDays(HOY,-P[C.cper]);
+  const agg=(arr)=>{const m={cumplido:0,tarde:0,atiempo:0,incumplido:0,venc:0};
+    for(const s of arr){for(const x of s.cal)if(x.f>=desde)m[x.res]++;if(s.venc)m.venc++;}
+    const den=m.cumplido+m.tarde+m.incumplido+m.venc;m.pct=den?Math.round(m.cumplido*100/den):null;return m;};
+  const row=(n,m,cls)=>`<tr class="${cls||''}"><td>${esc(n)}</td><td>${m.cumplido}</td><td>${m.tarde}</td><td>${m.atiempo}</td><td class="${m.incumplido?'hb':''}">${m.incumplido}</td><td class="${m.venc?'hw':''}">${m.venc}</td><td><b class="${m.pct!=null&&m.pct<60?'hb':''}">${m.pct==null?'—':m.pct+'%'}</b></td></tr>`;
+  const head='<tr><th></th><th>✔ Cumplidos</th><th>Tarde</th><th>Reprog. a tiempo</th><th>✖ Incumplidos</th><th>Vencidos hoy</th><th>% cumpl.</th></tr>';
+  const g=(key)=>{const o={};all.forEach(s=>{const k=key(s)||'(sin dato)';(o[k]=o[k]||[]).push(s);});return o;};
+  const bs=g(s=>s.c.suc),ba=g(s=>s.asesorAct);
+  const T=agg(all);
+  const ases=Object.keys(ba).map(k=>({k,m:agg(ba[k]),suc:ba[k][0].c.suc})).filter(x=>x.m.cumplido+x.m.tarde+x.m.incumplido+x.m.venc+x.m.atiempo>0).sort((a,b)=>(a.m.pct??101)-(b.m.pct??101));
+  return `<div class="panel"><h3>Cumplimiento de compromisos</h3>
+  <div class="frow"><select id="cPer"><option value="7" ${C.cper==='7'?'selected':''}>Últimos 7 días</option><option value="30" ${C.cper==='30'?'selected':''}>Últimos 30 días</option><option value="all" ${C.cper==='all'?'selected':''}>Todo</option></select></div>
+  <div class="tw"><table>${head}${Object.keys(bs).sort().map(k=>row(k.replace('CI-',''),agg(bs[k]))).join('')}${VISTA==='GP'?row('Total región',T,'tot'):''}</table></div>
+  <details style="margin-top:8px" ${VISTA!=='GP'?'open':''}><summary style="font-size:13px">Por asesor (${ases.length}) — peor cumplimiento primero</summary><div class="tw" style="margin-top:6px"><table>${head.replace('<th></th>','<th>Asesor</th>')}${ases.map(x=>row(x.k+(VISTA==='GP'?' · '+x.suc.replace('CI-',''):''),x.m)).join('')}</table></div></details>
+  <p class="note"><b>% cumpl.</b> = cumplidos ÷ (cumplidos + tarde + incumplidos + vencidos sin resolver). Dejar vencer sin mover también cuenta en contra. Reprogramar <b>antes</b> de la fecha no cuenta en contra; reprogramar ya vencido es <b>incumplido</b>.</p></div>`;
+}
 function benchHTML(){
   const B=DB.cfg.bench;
   if(!B||!B.reg)return '<div class="panel"><h3>¿Dónde se atoran los nuevos aprobados?</h3><p class="note">Carga el archivo de Nuevos para ver este panel (dato del sistema, sin captura del gerente).</p></div>';
@@ -1042,6 +1077,7 @@ function renderConc(){
   </table></div>
   <p class="note">Por asesor se cuenta con el asesor actual (después de reasignar). <b>↔ Quitadas</b> = cuentas que se le reasignaron a otro.</p>
   <p class="note"><b>Perfil</b> = rechazado por gerente/asesor (no cumplía el perfil: ¿para qué se pidió el approval?). <b>Venc.</b> = fecha compromiso ya pasada. ${T.sinMesa?`<b>${T.sinMesa}</b> rechazos sin llegar a mesa.`:''}${T.desPC?` <b>${T.desPC}</b> desembolsos por confirmar en sistema.`:''}${T.conf?` <b style="color:var(--bad)">${T.conf}</b> cuentas rechazadas que el sistema marca desembolsadas.`:''}${T.sc?` <b>${T.sc}</b> rechazos históricos sin motivo especificado.`:''}</p></div>
+  ${compHTML(all0)}
   ${benchHTML()}
   <div class="panel"><h3>Por segmento</h3><div class="tw"><table><tr><th></th><th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Perfil</th><th>Abiertos</th></tr>${segRows}</table></div></div>
   <div class="panel"><h3>Motivos de rechazo</h3>${motA.length?`<div class="bars">${motA.slice(0,12).map(([k,n])=>`<div class="b"><span class="l" title="${esc(k)}">${esc(k)}</span><span class="t"><i style="width:${n*100/motMax}%;background:${/\(/.test(k)?'#94a3b8':'#d97706'}"></i></span><span class="n">${n}</span></div>`).join('')}</div><p class="note">Naranja = perfil (gerente/asesor) · Gris = mesa / cliente / otro</p>`:'<p class="note">Aún no hay rechazos capturados.</p>'}</div>
@@ -1051,6 +1087,7 @@ function renderConc(){
   </table></div></details></div>`;
   $('#cSem').onchange=e=>{C.sem=e.target.value;renderConc();};
   const cd=$('#cDesde');if(cd)cd.onchange=e=>{C.desde=e.target.value;renderConc();};
+  const cp=$('#cPer');if(cp)cp.onchange=e=>{C.cper=e.target.value;renderConc();};
 }
 
 reindex();fillVista();
