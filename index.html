@@ -137,7 +137,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.8.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.8.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -174,7 +174,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.8.2', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.8.3', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -670,7 +670,7 @@ const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
 const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
   const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
-  let open=null;const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
+  let mesaG=false,mesaH=false;let open=null;const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
     const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
@@ -684,10 +684,10 @@ function st(id){
         else res=ef<=open.fprog?'cumplido':'tarde';
         if(res){const x={res,f:ef,fprog:open.fprog,etapa:open.etapa,dias:dd(open.fprog,ef)};cal.push(x);calU[e.uid||e.ts]=x;}}
       open=null;}
-    if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||(e.hist&&e.f>(c.alta||'')?e.f:'');falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa))mesa=true;}
-    if(e.mesa)mesa=true;
+    if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||(e.hist&&e.f>(c.alta||'')?e.f:'');falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa)){mesa=true;mesaG=true;}}
+    if(e.mesa){mesa=true;mesaH=true;}
     if(e.t==='reasig'){reasigs++;asesorPrev=e.de;asesorAct=e.a;fAsig=e.f;}
-    if(e.t==='rech'){etapa='Rechazado';rech=e;fprog='';if(e.cat===CAT_MESA)mesa=true;}
+    if(e.t==='rech'){etapa='Rechazado';rech=e;fprog='';if(e.cat===CAT_MESA){mesa=true;mesaG=true;}}
     if(e.t==='reac'){etapa=e.etapa;fprog=e.fprog||'';rech=null;reacs++;rechPrev=e.antes||rechPrev;}
     if(e.t==='des'){etapa='Desembolsado';desG=e;fprog='';}
     if((e.t==='etapa'||e.t==='repro'||e.t==='reac')&&fprog)open={etapa,fprog};else if(e.t==='des'||e.t==='rech'||sisDesEv)open=null;
@@ -697,6 +697,7 @@ function st(id){
   }
   const sisDes=/DESEMBOLSADO/i.test(c.est),sisMesa=!sisDes&&(/MESA/i.test(c.est)||!!c.anal||c.ll==='d');
   if(sisMesa||sisDes)mesa=true;
+  const mesaFuente=(sisMesa||sisDes)?'sistema':mesaH?'control histórico':mesaG?'según gerente':'';
   let cierre='';if(sisDes)cierre='des';else if(etapa==='Rechazado')cierre='rech';else if(etapa==='Desembolsado')cierre='desPC';
   asesorAct=asesorAct||c.asesor;
   const dias=c.fsol?dd(c.fsol,HOY):0,diasAs=fAsig?dd(fAsig,HOY):null,sinMov=dd(lastG||c.fsol||c.alta,HOY);
@@ -706,7 +707,7 @@ function st(id){
   const diasCierre=fC&&c.fsol?Math.max(0,dd(c.fsol,fC)):null;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
   const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
-  return {c,evs,fC,diasCierre,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
+  return {c,evs,mesaFuente,fC,diasCierre,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>VISTA==='GP'||DB.cuentas[id].suc===VISTA).map(st);}
 
@@ -954,7 +955,7 @@ function openDetalle(id){
     <div><span>Necesita aval</span>${esc(c.aval||'—')}</div>
     <div><span>Necesita referencias</span>${esc(c.refs||'—')}</div>
     <div><span>Estatus en sistema</span>${esc(c.est.replace(/^\S+\)\s*/,''))}</div>
-    <div><span>Llegó a mesa</span>${s.mesa?'Sí':'No'}</div>
+    <div><span>Llegó a mesa</span>${s.mesa?'Sí <small style="color:var(--mut)">('+s.mesaFuente+')</small>':'No'}</div>
     ${c.ll?`<div><span>Llenado (sistema)</span>${LLEN[c.ll]}</div>`:''}
     ${s.monto?`<div><span>Monto aprobado</span>${money(s.monto)}</div>`:''}
     ${c.safi?`<div><span>SafiCreditoID</span>${esc(c.safi)}</div>`:''}
