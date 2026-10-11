@@ -115,6 +115,7 @@ th,td{padding:6px 5px;border-bottom:1px solid var(--line);text-align:right;white
 th:first-child,td:first-child{text-align:left}
 th{color:var(--mut);font-weight:600;font-size:11px}
 tr.tot td{font-weight:700;background:#f9fafb}
+td.m-r{background:#fee2e2;color:#991b1b;font-weight:700}td.m-a{background:#fef3c7;color:#92400e;font-weight:700}td.m-v{background:#dcfce7;color:#166534;font-weight:700}
 td.hb{color:var(--bad);font-weight:700}
 td.hw{color:var(--warn);font-weight:700}
 details summary{cursor:pointer;font-weight:700;font-size:15px}
@@ -137,7 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1179,6 +1180,7 @@ function benchHTML(){
 }
 /* ================= Pestaña Approvals: conteo semanal (semana del sistema) ================= */
 const A={sem:'',suc:'',ase:''};
+const APV_MIN=2,APV_META=3; // por asesor por día hábil (lunes a viernes)
 const corto=n=>{const w=String(n||'').trim().split(/\s+/).filter(x=>!/^(DE|DEL|LA|LAS|LOS|Y)$/i.test(x));const t=x=>x?x[0]+x.slice(1).toLowerCase():'';return w.length>=3?t(w[0])+' '+t(w[w.length-2]):w.map(t).join(' ');};
 function semDe(iso){const d=new Date(iso+'T12:00:00Z'),t=new Date(d);t.setUTCDate(d.getUTCDate()+3-((d.getUTCDay()+6)%7));
   const y=t.getUTCFullYear(),j4=new Date(Date.UTC(y,0,4));return y+'-'+String(1+Math.round(((t-j4)/864e5-3+((j4.getUTCDay()+6)%7))/7)).padStart(2,'0');}
@@ -1194,25 +1196,27 @@ function renderApv(){
   const tReg=w=>Object.keys(D.sem[w]||{}).reduce((t,s)=>add(t,tSuc(w,s)),z());
   const tAse=(w,s,a)=>((D.sem[w]||{})[s]||{})[a]||z();
   const tot=w=>A.ase?tAse(w,A.suc,A.ase):A.suc?tSuc(w,A.suc):tReg(w);
+  const diasH=w=>{const l=lunesSem(w);let n=0;for(let i=0;i<5;i++){const d=new Date(l.getTime()+i*864e5).toISOString().slice(0,10);if(d<=D.fmax)n++;}return n;};
+  const semaf=(n,d)=>!d?'':n<APV_MIN*d?'m-r':n<APV_META*d?'m-a':'m-v';const dH=diasH(A.sem);
   const T=tot(A.sem),hoyW=semDe(HOY),cur=semN(A.sem)===hoyW,ult=semN(ws[ws.length-1]);
-  const row=(name,t,attr,cls)=>`<tr ${attr||''} class="${cls||''}"${attr?' style="cursor:pointer"':''}><td>${esc(name)}${attr?' <span style="color:var(--mut)">›</span>':''}</td><td>${t[0]}</td><td>${t[1]}</td><td><b>${pct(t[1],t[0])}</b></td></tr>`;
+  const row=(name,t,attr,cls,c0)=>`<tr ${attr||''} class="${cls||''}"${attr?' style="cursor:pointer"':''}><td>${esc(name)}${attr?' <span style="color:var(--mut)">›</span>':''}</td><td class="${c0||''}">${t[0]}</td><td>${t[1]}</td><td><b>${pct(t[1],t[0])}</b></td></tr>`;
   const head=f=>`<tr><th>${f}</th><th>Approvals</th><th>Acept.</th><th>%</th></tr>`;
   let tabla='';
   if(!A.ase){
     if(!A.suc){const ss=Object.keys(D.sem[A.sem]||{}).sort();
       tabla=`<h4>Por oficina</h4><div class="tw"><table>${head('Oficina')}${ss.map(s=>row(s.replace('CI-',''),tSuc(A.sem,s),`data-suc="${esc(s)}"`)).join('')}${row('Total región',T,'','tot').replace(' style="cursor:pointer"','')}</table></div><p class="note">Toca una oficina para ver a sus asesores.</p>`;}
     else{const o=(D.sem[A.sem]||{})[A.suc]||{};const as=Object.keys(o).sort((a,b)=>o[b][0]-o[a][0]||a.localeCompare(b));
-      tabla=`<h4>Por asesor</h4><div class="tw"><table>${head('Asesor')}${as.map(a=>row(corto(a),o[a],`data-ase="${esc(a)}"`)).join('')}${row('Total oficina',T,'','tot')}</table></div>${as.length?'<p class="note">Toca un asesor para ver sus últimas semanas.</p>':'<p class="note">Sin approvals esta semana.</p>'}`;}
+      tabla=`<h4>Por asesor</h4><div class="tw"><table>${head('Asesor')}${as.map(a=>row(corto(a),o[a],`data-ase="${esc(a)}"`,'',semaf(o[a][0],dH))).join('')}${row('Total oficina',T,'','tot')}</table></div>${as.length?`<p class="note">Color contra ${dH} día${dH===1?'':'s'} hábil${dH===1?'':'es'} de la semana: <b style="color:#b91c1c">rojo</b> menos de ${APV_MIN*dH} (mínimo ${APV_MIN}/día) · <b style="color:#b45309">amarillo</b> menos de ${APV_META*dH} · <b style="color:#15803d">verde</b> ${APV_META*dH}+ (meta ${APV_META}/día). El sábado suma pero no cuenta como día. Toca un asesor para ver sus semanas.</p>`:'<p class="note">Sin approvals esta semana.</p>'}`;}
   }
   const ult8=ws.slice(-8).reverse();
-  const trend=`<h4>Últimas semanas${A.ase?' · '+esc(corto(A.ase)):A.suc?' · '+esc(A.suc.replace('CI-','')):' · región'}</h4><div class="tw"><table>${head('Semana')}${ult8.map(w=>row(semL(w).replace('Sem ','')+(semN(w)===hoyW?' •':''),tot(w),'',w===A.sem?'tot':'').replace(' style="cursor:pointer"','')).join('')}</table></div>`;
+  const trend=`<h4>Últimas semanas${A.ase?' · '+esc(corto(A.ase)):A.suc?' · '+esc(A.suc.replace('CI-','')):' · región'}</h4><div class="tw"><table>${head('Semana')}${ult8.map(w=>row(semL(w).replace('Sem ','')+(semN(w)===hoyW?' •':''),tot(w),'',w===A.sem?'tot':'',A.ase?semaf(tot(w)[0],diasH(w)):'').replace(' style="cursor:pointer"','')).join('')}</table></div>`;
   const L=lunesSem(A.sem),DI=(D.dia||{}),DL=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const tDia=d=>{const o=DI[d]||{};let t=[0,0];const ss=A.suc?[A.suc]:Object.keys(o);
     for(const s of ss){const x=o[s]||{};for(const a in x)if(!A.ase||a===A.ase){t[0]+=x[a][0];t[1]+=x[a][1];}}return t;};
   const dias=[0,1,2,3,4,5,6].map(i=>{const d=new Date(L.getTime()+i*864e5).toISOString().slice(0,10);return {i,d,t:tDia(d)};}).filter(x=>x.i<6||x.t[0]);
   const hayDia=dias.some(x=>x.t[0]);
   const strip=hayDia?`<div style="display:grid;grid-template-columns:repeat(${dias.length},1fr);gap:4px;margin:6px 0 4px">${dias.map(x=>{const fut=x.d>D.fmax;
-    return `<div style="text-align:center;border:1px solid var(--line);border-radius:8px;padding:5px 2px;background:${fut?'#f9fafb':'var(--card)'}${x.d===HOY?';border-color:var(--brand)':''}"><div style="font-size:11px;color:var(--mut)">${DL[x.i]} ${+x.d.slice(8)}</div><b style="font-size:17px;color:${fut?'#cbd5e1':'inherit'}">${fut?'·':x.t[0]}</b><div style="font-size:11px;color:var(--ok)">${fut?'&nbsp;':x.t[1]+' ac.'}</div></div>`;}).join('')}</div><p class="note" style="margin-top:0">Approvals por día · ac. = aceptados</p>`:'';
+    return `<div style="text-align:center;border:1px solid var(--line);border-radius:8px;padding:5px 2px;background:${fut?'#f9fafb':'var(--card)'}${x.d===HOY?';border-color:var(--brand)':''}"><div style="font-size:11px;color:var(--mut)">${DL[x.i]} ${+x.d.slice(8)}</div><b style="font-size:17px;color:${fut?'#cbd5e1':A.ase&&x.i<5?({'m-r':'#b91c1c','m-a':'#b45309','m-v':'#15803d'})[semaf(x.t[0],1)]:'inherit'}">${fut?'·':x.t[0]}</b><div style="font-size:11px;color:var(--ok)">${fut?'&nbsp;':x.t[1]+' ac.'}</div></div>`;}).join('')}</div><p class="note" style="margin-top:0">Approvals por día · ac. = aceptados</p>`:'';
   const nivel=A.ase?esc(corto(A.ase))+' · '+esc(A.suc.replace('CI-','')):A.suc?esc(A.suc.replace('CI-','')):'Región Jalisco';
   const back=(gp&&A.suc)||A.ase?`<button class="btn" id="aBack" style="margin-bottom:8px">← ${A.ase?(A.suc.replace('CI-','')):'Región'}</button>`:'';
   el.innerHTML=`<div class="panel">
