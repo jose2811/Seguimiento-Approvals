@@ -12,7 +12,7 @@
 //
 // IMPORTANTE: subir CACHE_VERSION cada vez que se publique un cambio grande,
 // para que los cachés viejos se limpien solos en el siguiente open.
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const CACHE_NAME = `seguimiento-aceptados-${CACHE_VERSION}`;
 const CORE_ASSETS = [
   './',

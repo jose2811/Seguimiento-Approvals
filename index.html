@@ -48,6 +48,8 @@ main{padding:10px 10px 40px;max-width:900px;margin:0 auto}
 .days b{display:block;font-size:22px;line-height:1}
 .days span{font-size:10px;color:var(--mut);display:block}
 .days .tot{margin-top:3px;font-weight:600;color:#475569}
+.pill.req{background:transparent;color:#c0c6cf;border:1px solid #e5e7eb;font-weight:500}
+.pill.req.on{background:#fff7ed;color:#c2410c;border-color:#fdba74;font-weight:700}
 .pill.rea{background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc}
 .d0 b{color:var(--ok)}.d8 b{color:#d97706}.d15 b{color:var(--bad)}.d30 b{color:var(--bad2)}
 .pill{display:inline-block;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;background:var(--chip);color:#334155}
@@ -129,7 +131,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle">Approvals<small>v0.7.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle">Approvals<small>v0.7.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -166,7 +168,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <script>
 'use strict';
 /* ================= Config ================= */
-const VER='0.7.0', KEY='segAceptados_v1', KEYV='segAceptados_vista';
+const VER='0.7.1', KEY='segAceptados_v1', KEYV='segAceptados_vista';
 const SUCS=['CI-OBLATOS','CI-TLAJOMUCO','CI-TLAQUEPAQUE','CI-TONALA','CI-ZAPOPAN'];
 const ETAPAS={
   'Visita asesor':{fecha:'req'},
@@ -807,7 +809,7 @@ const FILTROS=[
   ['f_sinmot','Rechazados sin motivo',s=>s.cierre==='rech'&&s.rech.cat===CAT_SC],
   ['f_reas','↔ Reasignadas',s=>s.reasigs>0],
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
-  ['f_cerr','Cerrados',s=>!s.abierto],
+  ['f_cerr','Cerrados',s=>!s.abierto&&(ES_GP()||!s.fC||s.fC>=addDays(HOY,-30))],
 ];
 function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vConc').hidden=TAB!=='conc';TAB==='lista'?renderLista():renderConc();}
 function renderLista(){
@@ -885,7 +887,7 @@ function card(s){
     <div class="cmain">
       <div class="cname">${esc(c.nombre||'(sin nombre)')} <small>#${esc(c.id)}</small></div>
       <div class="cmeta">${VISTA==='GP'?`<b>${esc(c.suc.replace('CI-',''))}</b> ·`:''} ${esc(s.asesorAct)}${s.reasigs?` <span class="pill rea">↔ ${s.reasigs>1?s.reasigs+' reasig.':'reasignada'}</span>`:''}</div>
-      <div class="cmeta">${s.seg?`<span class="pill seg-${s.seg}">${s.seg}</span>`:''}<span class="pill">${esc(c.tipo||'—')}</span>${c.aval==='Sí'?'<span class="pill">Aval</span>':''}${c.refs==='Sí'?'<span class="pill">Refs</span>':''}<span>${c.fsol?'solicitud '+fmt(c.fsol,false):''}</span></div>
+      <div class="cmeta">${s.seg?`<span class="pill seg-${s.seg}">${s.seg}</span>`:''}<span class="pill">${esc(c.tipo||'—')}</span>${c.aval?`<span class="pill req ${c.aval==='Sí'?'on':''}" title="${c.aval==='Sí'?'Necesita aval':'No necesita aval'}">Aval</span>`:''}${c.refs?`<span class="pill req ${c.refs==='Sí'?'on':''}" title="${c.refs==='Sí'?'Necesita referencias':'No necesita referencias'}">Referencias</span>`:''}<span>${c.fsol?'solicitud '+fmt(c.fsol,false):''}</span></div>
       <div class="cstate">${estadoPills(s)}</div>
       ${s.lastCom?`<div class="ccom">💬 ${esc(s.lastCom)}</div>`:''}
     </div>
