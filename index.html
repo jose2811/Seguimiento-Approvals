@@ -138,7 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -875,7 +875,7 @@ function renderLista(){
   const pend=a=>a.filter(s=>s.abierto&&(s.venc||s.hoyC||s.sinGestion)).length;
   const verChips=VISTA!=='GP'||!!F.suc;
   const chipsAse=verChips?`<div class="filters ases">${['',...asesores.filter(a=>a===F.asesor||base.some(s=>s.asesorAct===a&&fn(s))).sort((x,y)=>pend(base.filter(s=>s.asesorAct===y))-pend(base.filter(s=>s.asesorAct===x))||x.localeCompare(y))].map(a=>{const sub=a?base.filter(s=>s.asesorAct===a):base;const n=pend(sub);
-    return `<button class="fchip ase ${F.asesor===a?'on':''}" data-a="${esc(a)}" title="${esc(a||'Todos')}">${a?esc(corto(a)):'Todos'} ${n?`<span class="pend">${n}</span>`:''}</button>`;}).join('')}</div>`:'';
+    return `<button class="fchip ase ${F.asesor===a?'on':''}" data-a="${esc(a)}" title="${esc(a||'Todos')}">${a?esc(corto(a)):'Todos'} ${n?`<span class="pend">${n}</span>`:''}</button>`;}).join('')}</div><p class="note" style="margin:2px 0 6px"><span class="pend" style="display:inline-block;min-width:16px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;padding:0 5px;text-align:center">n</span> = cuentas por atender hoy: compromiso vencido, compromiso de hoy o sin gestión. Al tocar un asesor ves <b>todas</b> sus cuentas abiertas, con esas primero.</p>`:'';
   const SECC=[['⚠ Compromisos vencidos — ¿qué pasó?',s=>s.venc],['📅 Compromisos de hoy',s=>s.hoyC],['Sin gestión — ¿qué sigue y cuándo?',s=>s.sinGestion],['Próximos compromisos',s=>s.fprog&&s.fprog>HOY],['Abiertas sin fecha',()=>true]];
   let cuerpo;
   if(F.q==='f_abiertos'){const usado=new Set();cuerpo=SECC.map(([t,f])=>{const g=shown.filter(s=>!usado.has(s.c.id)&&f(s));g.forEach(s=>usado.add(s.c.id));
