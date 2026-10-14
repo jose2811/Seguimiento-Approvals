@@ -138,7 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -651,9 +651,9 @@ function statusVerdes(s){
     if(/aval/i.test(m))return 'AVAL';
     if(r.cat===CAT_PERFIL)return 'PERFIL DEL CLIENTE';
     return 'NO CALIFICADO';}
-  if(s.sisMesa||GER_MESA.includes(s.etapa))return 'SE ENVIARA A MESA DE ANALISIS';
-  if(/aval/i.test(s.lastCom||''))return 'AVAL';
-  return 'EN SEGUIMIENTO';
+  if(s.sisMesa||ETAPA_MESA.includes(s.etapa))return 'EN MESA DE ANALISIS';
+  if(GER_MESA.includes(s.etapa))return 'SE ENVIARA A MESA DE ANALISIS';
+  return 'EN SEGUIMIENTO'; // abierta = todavía puede salir (aunque esté esperando aval)
 }
 function textoVerdes(s){
   if(s.cierre==='des')return 'Desembolsado'+(s.c.fdes?' '+fmt(s.c.fdes,false):'');
@@ -666,27 +666,32 @@ function textoVerdes(s){
   return et+(com?' – '+com:'');
 }
 function llenaVerdes(sheets,archivo){
-  // la hoja con mayor proporción de filas de Jalisco (su pestaña JALISCO); no se guarda nada del archivo
+  // la hoja con más filas de Jalisco; no se guarda nada del archivo
   let best=null;
   for(const sh of sheets){const H=sh.header.map(norm),iR=H.indexOf('region'),iId=H.indexOf('solicitud_id');if(iId<0)continue;
     const rows=sh.rows.filter(r=>r&&/^\d+$/.test(idDe(r[iId])));const jal=rows.filter(r=>/JALISCO/i.test(String(r[iR]||'')));
-    const sc=rows.length?jal.length/rows.length:0;if(jal.length&&(!best||sc>best.sc||(sc===best.sc&&jal.length>best.n)))best={sh,rows,sc,n:jal.length,iId,iR};}
+    const sc=rows.length?jal.length/rows.length:0;if(jal.length&&(!best||sc>best.sc||(sc===best.sc&&jal.length>best.n)))best={sh,rows,sc,n:jal.length,iId,iR,H};}
   if(!best)throw new Error('No encontré filas de Jalisco en el archivo VERDES');
   const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  const out=['Solicitud_id,Porque no se envio a mesa ?,STATUS,Cliente (app),Fuente'];let ok=0,sin=0,des=0;
-  // Respetar la posición exacta de cada fila (incluidas filas vacías) para poder pegar directo
-  const all=best.sc<1?best.rows:(()=>{let last=0;best.sh.rows.forEach((r,i)=>{if(r&&r.some(v=>v!=null&&v!==''))last=i;});return Array.from({length:last+1},(_,i)=>best.sh.rows[i]||null);})();
+  const H=best.H,iP=H.findIndex(h=>h.startsWith('porque no se envio')),iS=H.indexOf('status');
+  const mezclada=best.sc<1;let ok=0,sin=0,des=0;
+  // Todas las filas en su posición exacta (incluidas vacías), para pegar directo
+  let last=0;best.sh.rows.forEach((r,k)=>{if(r&&r.some(v=>v!=null&&v!==''))last=k;});
+  const all=Array.from({length:last+1},(_,k)=>best.sh.rows[k]||null);
+  const out=[mezclada?'Porque no se envio a mesa ?,STATUS,Solicitud_id (verificar),Región,Qué pasó':'Solicitud_id,Porque no se envio a mesa ?,STATUS,Cliente (app),Fuente'];
   for(const r of all){
-    if(!r||!/^\d+$/.test(idDe(r[best.iId]))){out.push(',,,,Fila sin Solicitud_id');continue;}
-    const id=idDe(r[best.iId]);
-    if(best.sc<1&&!/JALISCO/i.test(String(r[best.iR]||'')))continue;
-    if(DB.cuentas[id]){const s=st(id);const stt=statusVerdes(s);if(stt==='DESEMBOLSADO')des++;ok++;
-      out.push([id,textoVerdes(s),stt,s.c.nombre,'App'].map(q).join(','));}
-    else{sin++;out.push([id,'','','','Sin dato en la app'].map(q).join(','));}
+    const id=r?idDe(r[best.iId]):'';
+    const P=r&&iP>=0&&r[iP]!=null?r[iP]:'',S=r&&iS>=0&&r[iS]!=null?r[iS]:'';
+    if(!r||!/^\d+$/.test(id)){out.push(mezclada?[P,S,id,r?r[best.iR]:'',r?'Fila con Solicitud_id raro: se deja igual':'Fila vacía'].map(q).join(','):',,,,Fila sin Solicitud_id');continue;}
+    const jal=/JALISCO/i.test(String(r[best.iR]||''));
+    if(mezclada&&!jal){out.push([P,S,id,r[best.iR],'Otra región: se deja igual'].map(q).join(','));continue;}
+    if(DB.cuentas[id]){const st_=st(id);const stt=statusVerdes(st_);if(stt==='DESEMBOLSADO')des++;ok++;
+      out.push((mezclada?[textoVerdes(st_),stt,id,r[best.iR],'Jalisco: llenado desde la app']:[id,textoVerdes(st_),stt,st_.c.nombre,'App']).map(q).join(','));}
+    else{sin++;out.push((mezclada?[P,S,id,r[best.iR],'Jalisco: sin dato en la app, se deja igual']:[id,'','','','Sin dato en la app']).map(q).join(','));}
   }
   const b=new Blob(['﻿'+out.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='VERDES_JALISCO_llenado_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  return {ok,sin,des,total:ok+sin,mezclada:best.sc<1};
+  return {ok,sin,des,total:ok+sin,mezclada,filas:all.length,hoja:best.sh.name||''};
 }
 
 function importFile(sheets,archivo){
@@ -768,7 +773,7 @@ $('#fx').onchange=async e=>{
       const porTipo={};for(const sh of sheets){const t=tipoHoja(sh.header);if(t)(porTipo[t]=porTipo[t]||[]).push(sh);}
       const tipos=Object.keys(porTipo);if(!tipos.length)throw new Error(f.name+': no reconozco este archivo');
       if(porTipo.verdes){const v=llenaVerdes(sheets,f.name);
-        toast(v.mezclada?`⚠ VERDES: no hay pestaña de puro Jalisco; saqué ${v.total} filas de Jalisco de una hoja revuelta.\nNO pegues directo: usa BUSCARX por Solicitud_id.`:`✔ VERDES: ${v.total} filas de Jalisco, en el mismo orden exacto de su hoja\n${v.ok} llenadas desde la app (${v.des} ya desembolsadas) · ${v.sin} sin dato\nCopia las columnas B y C del CSV y pégalas en "Porque no se envio a mesa ?" y "STATUS". Revisa que el Solicitud_id coincida.\n(El archivo VERDES no se guarda en la app)`,15000);
+        toast(v.mezclada?`✔ VERDES (hoja de toda la subdirección${v.hoja?': '+v.hoja:''}): ${v.filas} filas en el mismo orden exacto\nJalisco: ${v.ok} llenadas desde la app (${v.des} desembolsadas) · ${v.sin} sin dato (se dejan como estaban). Las otras regiones se copian tal cual.\nDescarga una copia fresca justo antes, y pega las columnas A y B del CSV en "Porque no se envio a mesa ?" y "STATUS" desde la fila 2. Revisa que el Solicitud_id (col. C) coincida.\n(El archivo VERDES no se guarda en la app)`:`✔ VERDES: ${v.total} filas de Jalisco, en el mismo orden exacto de su hoja\n${v.ok} llenadas desde la app (${v.des} ya desembolsadas) · ${v.sin} sin dato\nCopia las columnas B y C del CSV y pégalas en "Porque no se envio a mesa ?" y "STATUS". Revisa que el Solicitud_id coincida.\n(El archivo VERDES no se guarda en la app)`,15000);
         if(files.length===1)return;continue;}
       for(const t of tipos)lote.push({t,f,sheets:porTipo[t]});}
     lote.sort((x,y)=>PRIO[x.t]-PRIO[y.t]);
