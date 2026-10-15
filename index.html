@@ -138,7 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.6</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.7</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -847,6 +847,7 @@ $('#bSync').onclick=()=>sincroniza(false);
 /* ================= Lista ================= */
 const SIMPLE=()=>!ES_GP();
 const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
+const FILTROS_SIMPLE_SI_HAY=['f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
 const F={q:'f_abiertos',suc:'',asesor:'',seg:'',txt:''};
@@ -877,7 +878,7 @@ function renderLista(){
   const base=all.filter(s=>(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg));
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
-  const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
+  const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
   const fn=FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
