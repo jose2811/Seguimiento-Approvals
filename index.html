@@ -138,7 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.7</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.8</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -195,7 +195,7 @@ const MOT_REPRO=['Cliente no estaba','Cliente pidió cambiar la fecha','Falta do
 const RECH={
   'Perfil (gerente / asesor)':['No es su negocio / prestanombres','Negocio pequeño / poco inventario','Sin negocio / negocio muy nuevo','Tipo de negocio / perfil no apto','Zona conflictiva / fuera de zona','Historial / atrasos / buró','Sin capacidad de pago','No se ubicó el negocio','Otro'],
   'Mesa de análisis':['Buró','Capacidad de pago','Información inconsistente','Sin detalle','Otro'],
-  'Cliente':['Ya no lo quiere / no por el momento','Tasa / le pareció caro','Pospone / se espera','No consiguió aval o documentos','Se fue con otra financiera','No localizable','No le convenció el monto aprobado','Otro'],
+  'Cliente':['Ya no lo quiere / no por el momento','Tasa de interés / le pareció caro','Pospone / se espera','No consiguió aval o documentos','Se fue con otra financiera','No localizable','No le convenció el monto aprobado','Otro'],
 };
 const CAT_SC='Sin clasificar',CAT_PERFIL='Perfil (gerente / asesor)', CAT_MESA='Mesa de análisis';
 /* Clasificación de comentarios libres del control histórico (orden importa) */
@@ -208,7 +208,7 @@ const REGLAS=[
   [/tipo de negocio|perfil|tianguis|taxi|no apto|arraigo|vinos/, CAT_PERFIL,'Tipo de negocio / perfil no apto'],
   [/atraso|pago mal|adeudo|lista negra|buro|grupal|referencias|vobo/, CAT_PERFIL,'Historial / atrasos / buró'],
   [/recursos|no puede pagar|capacidad/, CAT_PERFIL,'Sin capacidad de pago'],
-  [/interes|tasa|caro|precio/, 'Cliente','Tasa / le pareció caro'],
+  [/interes|tasa|caro|precio/, 'Cliente','Tasa de interés / le pareció caro'],
   [/\baval\b/, 'Cliente','No consiguió aval o documentos'],
   [/no lo quiere|no quiere|no le interesa|no lo requiere|no por el momento|dejo de operar|sobreendeudar/, 'Cliente','Ya no lo quiere / no por el momento'],
   [/espera|pospone|temporada|meses|fin de mes|liquidar|tramite|ella se comunica/, 'Cliente','Pospone / se espera'],
@@ -732,7 +732,7 @@ function st(id){
     if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||(e.hist&&e.f>(c.alta||'')?e.f:'');falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa)){mesa=true;mesaG=true;}}
     if(e.mesa){mesa=true;mesaH=true;}
     if(e.t==='reasig'){reasigs++;asesorPrev=e.de;asesorAct=e.a;fAsig=e.f;}
-    if(e.t==='rech'){etapa='Rechazado';rech=e;fprog='';if(e.cat===CAT_MESA){mesa=true;mesaG=true;}}
+    if(e.t==='rech'){etapa='Rechazado';rech=e.motivo==='Tasa / le pareció caro'?{...e,motivo:'Tasa de interés / le pareció caro'}:e;fprog='';if(e.cat===CAT_MESA){mesa=true;mesaG=true;}}
     if(e.t==='reac'){etapa=e.etapa;fprog=e.fprog||'';rech=null;reacs++;rechPrev=e.antes||rechPrev;}
     if(e.t==='des'){etapa='Desembolsado';desG=e;fprog='';}
     if((e.t==='etapa'||e.t==='repro'||e.t==='reac')&&fprog)open={etapa,fprog};else if(e.t==='des'||e.t==='rech'||sisDesEv)open=null;
@@ -1248,6 +1248,10 @@ function renderApv(){
   el.querySelectorAll('[data-suc]').forEach(tr=>tr.onclick=()=>{A.suc=tr.dataset.suc;A.ase='';renderApv();});
   el.querySelectorAll('[data-ase]').forEach(tr=>tr.onclick=()=>{A.ase=tr.dataset.ase;renderApv();window.scrollTo(0,0);});
 }
+const ALZA_TASA='2026-10-16'; // fecha del alza de tasas, para comparar antes / después
+function tasaHTML(all){const r=all.filter(s=>s.cierre==='rech'&&/^Tasa/.test(s.rech.motivo||''));
+  const antes=r.filter(s=>s.rech.hist||(s.rech.f||'')<ALZA_TASA).length,desp=r.length-antes;
+  return `<p class="note" style="margin-top:6px">💲 <b>Rechazo por tasa de interés:</b> ${antes} antes del ${fmt(ALZA_TASA,false)} · <b>${desp}</b> desde el alza de tasas.</p>`;}
 function renderConcSimple(all){
   const ab=all.filter(s=>s.abierto),c30=cierre30(all),pa=promAb(all);
   const g={};all.forEach(s=>{const k=s.asesorAct||'(sin asesor)';(g[k]=g[k]||[]).push(s);});
@@ -1299,7 +1303,7 @@ function renderConc(){
   ${compHTML(all0)}
   ${benchHTML()}
   <div class="panel"><h3>Por segmento</h3><div class="tw"><table><tr><th></th><th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Perfil</th><th>Abiertos</th></tr>${segRows}</table></div></div>
-  <div class="panel"><h3>Motivos de rechazo</h3>${motA.length?`<div class="bars">${motA.slice(0,12).map(([k,n])=>`<div class="b"><span class="l" title="${esc(k)}">${esc(k)}</span><span class="t"><i style="width:${n*100/motMax}%;background:${/\(/.test(k)?'#94a3b8':'#d97706'}"></i></span><span class="n">${n}</span></div>`).join('')}</div><p class="note">Naranja = perfil (gerente/asesor) · Gris = mesa / cliente / otro</p>`:'<p class="note">Aún no hay rechazos capturados.</p>'}</div>
+  <div class="panel"><h3>Motivos de rechazo</h3>${motA.length?`<div class="bars">${motA.slice(0,12).map(([k,n])=>`<div class="b"><span class="l" title="${esc(k)}">${esc(k)}</span><span class="t"><i style="width:${n*100/motMax}%;background:${/\(/.test(k)?'#94a3b8':'#d97706'}"></i></span><span class="n">${n}</span></div>`).join('')}</div><p class="note">Naranja = perfil (gerente/asesor) · Gris = mesa / cliente / otro</p>${tasaHTML(all)}`:'<p class="note">Aún no hay rechazos capturados.</p>'}</div>
   <div class="panel"><details ${VISTA!=='GP'?'open':''}><summary>Por asesor (${ases.length})</summary><div class="tw" style="margin-top:8px"><table>
     <tr><th>Asesor</th>${VISTA==='GP'?'<th>Suc.</th>':''}<th>Acept.</th><th>Desemb.</th><th>Conv.</th><th>Perfil</th><th>% perfil</th><th>Abiertos</th><th>+30d</th><th>↔ Quitadas</th></tr>
     ${ases.map(a=>`<tr><td>${esc(a.k)}</td>${VISTA==='GP'?`<td>${esc(a.suc.replace('CI-',''))}</td>`:''}<td>${a.m.acept}</td><td>${a.m.des}</td><td>${pct(a.m.des,a.m.acept)}</td><td class="${a.m.perfil?'hw':''}">${a.m.perfil}</td><td class="${a.m.acept&&a.m.perfil/a.m.acept>=.2?'hb':''}">${pct(a.m.perfil,a.m.acept)}</td><td>${a.m.ab}</td><td class="${a.m.a30?'hb':''}">${a.m.a30}</td><td class="${a.q?'hw':''}">${a.q}</td></tr>`).join('')}
