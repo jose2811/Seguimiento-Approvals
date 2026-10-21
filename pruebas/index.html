@@ -132,6 +132,9 @@ details summary{cursor:pointer;font-weight:700;font-size:15px}
 .menu button{display:block;width:100%;text-align:left;background:none;border:0;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line)}
 .menu button:hover{background:#f3f4f6}
 .proto{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;border-radius:8px;padding:6px 8px;margin-bottom:8px}
+@keyframes movida{0%{box-shadow:0 0 0 0 rgba(0,175,162,.0);transform:scale(.98)}15%{box-shadow:0 0 0 4px rgba(0,175,162,.9);transform:scale(1.01)}70%{box-shadow:0 0 0 4px rgba(0,175,162,.6)}100%{box-shadow:0 0 0 0 rgba(0,175,162,0);transform:scale(1)}}
+.card.movida{animation:movida 3s ease-out;position:relative;overflow:visible}
+.movtag{position:absolute;top:-11px;left:10px;z-index:2;background:var(--brand);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 8px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.2)}
 footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 </style>
 </head>
@@ -1011,7 +1014,14 @@ function card(s){
 let CUR=null;
 let LOCK=false;
 function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
-function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;}
+function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;if(MOVIDA){const id=MOVIDA;MOVIDA=null;setTimeout(()=>señalaMovida(id),60);}}
+/* Al cerrar el detalle después de guardar: la tarjeta se reacomoda; la llevamos a la vista y la resaltamos para que no se pierda */
+let MOVIDA=null;
+function seccionDe(s){return !s.abierto?'Cerrados':s.venc?'Compromiso vencido':s.hoyC?'Compromisos de hoy':s.sinGestion?'Sin gestión':s.fprog?'Próximos ('+fmt(s.fprog)+')':'Sin fecha';}
+function señalaMovida(id){if(TAB!=='lista'||!DB.cuentas[id])return;const el=document.querySelector('#vLista .card[data-id="'+CSS.escape(id)+'"]'),sec=seccionDe(st(id));
+  if(!el){toast('📍 '+DB.cuentas[id].nombre+' se movió a «'+sec+'» (fuera del filtro actual)');return;}
+  el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.remove('movida');void el.offsetWidth;el.classList.add('movida');
+  const t=document.createElement('div');t.className='movtag';t.textContent='📍 Se acomodó aquí · '+sec;el.prepend(t);setTimeout(()=>{t.remove();el.classList.remove('movida');},3200);}
 $('#ov').onclick=e=>{if(e.target.id==='ov')closeSheet();};
 function evTxt(e){
   switch(e.t){
@@ -1177,7 +1187,7 @@ function openDetalle(id){
       addEv(id,{t:'reac',etapa,fprog:fecha,com,antes:s.rech?s.rech.motivo:''});done('↺ Cuenta reactivada');
     };
   }
-  function done(msg){toast('✔ '+msg);render();openDetalle(id);}
+  function done(msg){toast('✔ '+msg);MOVIDA=id;render();openDetalle(id);}
 }
 
 /* ================= Concentrado ================= */
