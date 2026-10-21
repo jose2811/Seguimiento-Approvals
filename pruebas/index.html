@@ -792,7 +792,7 @@ function fillVista(){
   $('#vista').innerHTML=o.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');
   $('#vista').value=VISTA;$('#vista').hidden=n==='gerente'||o.length<2;
 }
-$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.suc='';F.asesor='';A.reg='';A.suc='';A.ase='';render();};
+$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.reg='';F.suc='';F.asesor='';A.reg='';A.suc='';A.ase='';render();};
 let TAB='lista';
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{TAB=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render();});
 $('#bMenu').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('on');};
@@ -891,7 +891,7 @@ const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
 const FILTROS_SIMPLE_SI_HAY=['f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
-const F={q:'f_abiertos',suc:'',asesor:'',seg:'',txt:''};
+const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:''};
 const FILTROS=[
   ['f_abiertos','Abiertos',s=>s.abierto],
   ['f_venc','Compromiso vencido',s=>s.venc],
@@ -915,8 +915,9 @@ function renderLista(){
   if(!all.length){$('#vLista').innerHTML=`<div class="empty"><b>Sin datos todavía</b><br><b>1.</b> Carga tu control (Detalle Region approvals) para arrancar la base.<br><b>2.</b> Después carga cada día el funnel (y si quieres Nuevos y Renovaciones), los 3 de una vez.<br>Solo se guardan los aceptados y las columnas de seguimiento.<br><button class="btn" onclick="document.getElementById('fx').click()">📥 Cargar archivos</button></div>`;return;}
   const ab=all.filter(s=>s.abierto);
   const k={ab:ab.length,a30:ab.filter(s=>s.dias>30).length,venc:ab.filter(s=>s.venc).length,rep:ab.filter(s=>s.repros>=2).length};
-  const sucs=[...new Set(all.map(s=>s.c.suc))].sort();
-  const base=all.filter(s=>(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg));
+  const regsL=[...new Set(all.map(s=>REG(s.c.suc)).filter(Boolean))].sort();if(F.reg&&!regsL.includes(F.reg))F.reg='';
+  const sucs=[...new Set(all.filter(s=>!F.reg||REG(s.c.suc)===F.reg).map(s=>s.c.suc))].sort();if(F.suc&&!sucs.includes(F.suc))F.suc='';
+  const base=all.filter(s=>(!F.reg||REG(s.c.suc)===F.reg)&&(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg));
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
   const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
@@ -950,6 +951,7 @@ function renderLista(){
   <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
   <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
+    ${regsL.length>1?`<select id="fReg"><option value="">Todas las regiones</option>${regsL.map(x=>`<option value="${esc(x)}" ${F.reg===x?'selected':''}>${esc(tit(x))}</option>`).join('')}</select>`:''}
     ${MULTI()?`<select id="fSuc"><option value="">Todas las sucursales</option>${sucs.map(x=>`<option ${F.suc===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
     ${verChips?'':`<select id="fAse"><option value="">Todos los asesores</option>${asesores.map(x=>`<option ${F.asesor===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`}
     ${SIMPLE()?'':`<select id="fSeg"><option value="">A / B / C</option>${['A','B','C'].map(x=>`<option ${F.seg===x?'selected':''} value="${x}">Aceptado ${x}</option>`).join('')}</select>`}
@@ -961,7 +963,7 @@ function renderLista(){
   document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{F.asesor=b.dataset.a;renderLista();});
   document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.q=b.dataset.q;renderLista();});
   const on=(sel,k)=>{const el=$(sel);if(el)el.onchange=e=>{F[k]=e.target.value;renderLista();};};
-  on('#fSuc','suc');on('#fAse','asesor');on('#fSeg','seg');
+  on('#fReg','reg');on('#fSuc','suc');on('#fAse','asesor');on('#fSeg','seg');
   const t=$('#fTxt');t.oninput=e=>{F.txt=e.target.value;clearTimeout(t._d);t._d=setTimeout(()=>{renderLista();const n=$('#fTxt');n.focus();n.setSelectionRange(n.value.length,n.value.length);},350);};
   document.querySelectorAll('.card').forEach(el=>el.onclick=()=>openDetalle(el.dataset.id));
 }
