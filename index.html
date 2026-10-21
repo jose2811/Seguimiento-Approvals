@@ -135,6 +135,8 @@ details summary{cursor:pointer;font-weight:700;font-size:15px}
 @keyframes movida{0%{box-shadow:0 0 0 0 rgba(0,175,162,.0);transform:scale(.98)}15%{box-shadow:0 0 0 4px rgba(0,175,162,.9);transform:scale(1.01)}70%{box-shadow:0 0 0 4px rgba(0,175,162,.6)}100%{box-shadow:0 0 0 0 rgba(0,175,162,0);transform:scale(1)}}
 .card.movida{animation:movida 3s ease-out;position:relative;overflow:visible}
 .movtag{position:absolute;top:-11px;left:10px;z-index:2;background:var(--brand);color:#fff;font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 8px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+#verMov{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;background:#111827;color:#fff;border-radius:12px;padding:9px 12px;font-size:13px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw}
+#verMov button{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;white-space:nowrap}
 footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 </style>
 </head>
@@ -1013,14 +1015,31 @@ function card(s){
 let CUR=null;
 let LOCK=false;
 function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
-function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;if(MOVIDA){const id=MOVIDA;MOVIDA=null;setTimeout(()=>señalaMovida(id),60);}}
-/* Al cerrar el detalle después de guardar: la tarjeta se reacomoda; la llevamos a la vista y la resaltamos para que no se pierda */
+function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;}
+/* Al guardar: se cierra el detalle, la pantalla no se mueve y la tarjeta viaja visiblemente a su nuevo lugar */
 let MOVIDA=null;
 function seccionDe(s){return !s.abierto?'Cerrados':s.venc?'Compromiso vencido':s.hoyC?'Compromisos de hoy':s.sinGestion?'Sin gestión':s.fprog?'Próximos ('+fmt(s.fprog)+')':'Sin fecha';}
-function señalaMovida(id){if(TAB!=='lista'||!DB.cuentas[id])return;const el=document.querySelector('#vLista .card[data-id="'+CSS.escape(id)+'"]'),sec=seccionDe(st(id));
-  if(!el){toast('📍 '+DB.cuentas[id].nombre+' se movió a «'+sec+'» (fuera del filtro actual)');return;}
-  el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.remove('movida');void el.offsetWidth;el.classList.add('movida');
-  const t=document.createElement('div');t.className='movtag';t.textContent='📍 Se acomodó aquí · '+sec;el.prepend(t);setTimeout(()=>{t.remove();el.classList.remove('movida');},3200);}
+function reacomoda(id){
+  const q=()=>document.querySelector('#vLista .card[data-id="'+CSS.escape(id)+'"]');
+  const old=TAB==='lista'?q():null,r0=old?old.getBoundingClientRect():null;
+  closeSheet(true);render();if(TAB!=='lista')return;
+  const el=q(),sec=seccionDe(st(id)),nom=DB.cuentas[id].nombre;
+  if(!el){ // salió del filtro: un "fantasma" baja y se desvanece donde estaba
+    if(r0){const g=old.cloneNode(true);Object.assign(g.style,{position:'fixed',left:r0.left+'px',top:r0.top+'px',width:r0.width+'px',margin:0,zIndex:50,pointerEvents:'none',transition:'transform .7s ease-in, opacity .7s ease-in'});
+      document.body.appendChild(g);requestAnimationFrame(()=>{g.style.transform='translateY(120px)';g.style.opacity='0';});setTimeout(()=>g.remove(),800);}
+    verBtn('📍 '+nom+' pasó a «'+sec+'» (fuera de este filtro)',null);return;}
+  const r1=el.getBoundingClientRect();
+  if(r0){const dy=r0.top-r1.top;el.style.transition='none';el.style.transform='translateY('+dy+'px)';el.style.zIndex='5';el.style.position='relative';
+    void el.offsetWidth;el.style.transition='transform .8s cubic-bezier(.3,.7,.3,1)';el.style.transform='';
+    setTimeout(()=>{el.style.transition='';el.style.zIndex='';},850);}
+  el.classList.remove('movida');void el.offsetWidth;el.classList.add('movida');setTimeout(()=>el.classList.remove('movida'),3000);
+  const t=document.createElement('div');t.className='movtag';t.textContent='📍 '+sec;el.prepend(t);setTimeout(()=>t.remove(),3200);
+  const vis=r1.top>=60&&r1.bottom<=innerHeight;if(!vis)verBtn('📍 '+nom+' se movió a «'+sec+'»',el);
+}
+function verBtn(txt,el){let b=document.getElementById('verMov');if(b)b.remove();b=document.createElement('div');b.id='verMov';
+  b.innerHTML='<span></span>'+(el?'<button>Ver ↓</button>':'');b.querySelector('span').textContent=txt;document.body.appendChild(b);
+  if(el)b.querySelector('button').onclick=()=>{el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.remove('movida');void el.offsetWidth;el.classList.add('movida');b.remove();};
+  setTimeout(()=>b.remove(),6000);}
 $('#ov').onclick=e=>{if(e.target.id==='ov')closeSheet();};
 function evTxt(e){
   switch(e.t){
@@ -1186,7 +1205,7 @@ function openDetalle(id){
       addEv(id,{t:'reac',etapa,fprog:fecha,com,antes:s.rech?s.rech.motivo:''});done('↺ Cuenta reactivada');
     };
   }
-  function done(msg){toast('✔ '+msg);MOVIDA=id;render();openDetalle(id);}
+  function done(msg){toast('✔ '+msg);reacomoda(id);}
 }
 
 /* ================= Concentrado ================= */
