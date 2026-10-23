@@ -165,6 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
     <button id="mIni" hidden>📅 Inicio del seguimiento</button>
     <button id="mHist" hidden>🧾 Historial de cargas</button>
     <button id="mPwd">🔑 Cambiar mi contraseña</button>
+    <button id="mReset" hidden>🔐 Restablecer contraseña de un usuario</button>
     <button id="mBorrar" style="color:#b91c1c">🚪 Cerrar sesión</button>
   </div>
 </header>
@@ -474,7 +475,7 @@ function aplicaPerfil(){
   if(n==='regional'&&pf&&!(VISTA==='R:'+pf.region||REG(VISTA)===pf.region))VISTA='R:'+pf.region;
   if((n==='admin'||n==='subdireccion')&&pf&&pf.region&&!localStorage.getItem(KEYV))VISTA='R:'+pf.region;
   $('#vista').hidden=n==='gerente';$('#bImport').hidden=!gp;
-  ['mImp','mIni','mHist','mVer','mAdd'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
+  ['mImp','mIni','mHist','mVer','mAdd','mReset'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
   $('#who').textContent=PERFIL()?PERFIL().nombre+({admin:' · admin',subdireccion:' · subdirección',regional:' · regional'}[NIVEL()]||''):'';
   pintaSync();
 }
@@ -877,6 +878,21 @@ $('#mHist').onclick=()=>{
 };
 $('#mBorrar').onclick=()=>logout();
 $('#mSync').onclick=()=>sincroniza(false);
+$('#mReset').onclick=async()=>{
+  openSheet(`<div class="shead"><h3>Restablecer contraseña</h3><button class="x" data-close>✕</button></div><p class="note">Cargando usuarios…</p>`);
+  let us=[];try{us=await rest('perfiles?select=usuario,nombre,rol,sucursal,region&order=usuario');}catch(e){$('#sheet').querySelector('.note').textContent='No se pudo cargar la lista: '+e.message;return;}
+  const lbl=u=>u.usuario+' — '+u.nombre+(u.rol==='gerente'&&u.sucursal?' ('+tit(u.sucursal.replace('CI-',''))+')':u.region?' ('+tit(u.region)+')':'');
+  openSheet(`<div class="shead"><h3>Restablecer contraseña</h3><button class="x" data-close>✕</button></div>
+   <p class="note">Para cuando alguien la olvidó. Se genera una contraseña temporal nueva; la anterior deja de funcionar.</p>
+   <form class="form on" id="rs"><label>Usuario</label><select id="rs_u">${us.filter(u=>u.usuario!==(PERFIL()||{}).usuario).map(u=>`<option value="${esc(u.usuario)}">${esc(lbl(u))}</option>`).join('')}</select>
+   <div class="err" id="rs_err"></div><div class="row"><button class="btn red" type="submit" id="rs_ok">Generar contraseña nueva</button></div></form><div id="rs_res"></div>`);
+  $('#rs').onsubmit=async ev=>{ev.preventDefault();const u=$('#rs_u').value;if(!confirm('¿Restablecer la contraseña de '+u+'? La actual dejará de funcionar.'))return;
+    $('#rs_ok').disabled=true;$('#rs_err').textContent='Generando…';
+    try{const pw=await rest('rpc/admin_reset_password',{method:'POST',body:{u}});$('#rs_err').textContent='';
+      $('#rs_res').innerHTML=`<div class="panel" style="margin-top:10px"><p class="note">Nueva contraseña de <b>${esc(u)}</b>:</p><div style="font:700 22px monospace;letter-spacing:1px;margin:6px 0" id="rs_pw">${esc(pw)}</div>
+        <div class="row"><button class="btn" id="rs_cp" type="button">📋 Copiar mensaje</button></div><p class="note">Mándasela por WhatsApp. Puede cambiarla en ⋯ → Cambiar mi contraseña.</p></div>`;
+      $('#rs_cp').onclick=()=>{const t='Tu acceso a Approvals:\nUsuario: '+u+'\nContraseña: '+pw+'\nhttps://jose2811.github.io/Seguimiento-Approvals/pruebas/';navigator.clipboard?navigator.clipboard.writeText(t).then(()=>toast('✔ Copiado'),()=>toast('Mantén presionado para copiar')):toast('Copia la contraseña manualmente');};}
+    catch(e){$('#rs_err').textContent=(e.message||'').replace(/^HTTP \d+: /,'');$('#rs_ok').disabled=false;}};};
 $('#mPwd').onclick=()=>{openSheet(`<div class="shead"><h3>Cambiar mi contraseña</h3><button class="x" data-close>✕</button></div>
   <form class="form on" id="pw"><label>Nueva contraseña (mínimo 8)</label><input id="pw1" type="password" autocomplete="new-password">
   <label>Repítela</label><input id="pw2" type="password" autocomplete="new-password"><div class="err" id="pw_err"></div>
