@@ -253,13 +253,10 @@ function toISODate(v,yearHint){
 /* Nombre abreviado: se guarda SOLO así (minimización de datos). "BERTHA ALICIA MUNIZ AVALOS" -> "Bertha A. Muniz A." */
 const PART=new Set(['DE','DEL','LA','LAS','LOS','Y','SAN','SANTA','MC','VAN','VON']);
 function tc(w){return w.toLowerCase().replace(/(^|[\s-])(\S)/g,(m,a,b)=>a+b.toUpperCase()).replace(/\b(De|Del|La|Las|Los|Y)\b(?=\s)/g,x=>x.toLowerCase()).replace(/^(\S)/,x=>x.toUpperCase());}
-function abrevia(n){
-  const raw=String(n||'').trim().toUpperCase().split(/\s+/).filter(Boolean);if(raw.length<2)return tc(raw.join(' '));
-  const t=[];let pend='';for(const w of raw){if(PART.has(w)){pend+=(pend?' ':'')+w;continue;}t.push(pend?pend+' '+w:w);pend='';}if(pend)t.push(pend);
-  if(t.length===1)return tc(t[0]);
-  if(t.length===2)return tc(t[0])+' '+t[1][0]+'.';
-  const nombres=t.slice(0,t.length-2),ap=t[t.length-2],am=t[t.length-1];
-  return [tc(nombres[0]),...nombres.slice(1).map(x=>x.split(' ').pop()[0]+'.'),tc(ap),am.split(' ').pop()[0]+'.'].join(' ');
+function abrevia(n){ // nombre completo en Altas y bajas (los archivos vienen en MAYÚSCULAS); partículas en minúscula
+  const raw=String(n||'').trim().toUpperCase().split(/\s+/).filter(Boolean);
+  const MIN=new Set(['DE','DEL','LA','LAS','LOS','Y']);
+  return raw.map((w,k)=>k>0&&MIN.has(w)?w.toLowerCase():tc(w)).join(' ');
 }
 const segL=s=>{const m=/ACEPTADO\s+([ABC])/i.exec(s||'');return m?m[1].toUpperCase():'';};
 const siNo=v=>/^s/i.test(norm(v))?'Sí':(v?'No':'');
