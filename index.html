@@ -138,7 +138,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.8</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v0.9.9</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -581,6 +581,7 @@ const LLEN={a:'No inició',b:'Inició, no terminó',c:'Terminó, no llegó a mes
 const GER_MESA=['Se sube a mesa','En mesa','Por desembolsar'];
 function tipoHoja(header){const H=header.map(norm);
   if(H.some(h=>h.startsWith('porque no se envio')))return 'verdes';
+  if(H.includes('comentarios')&&H.includes('solicitud_id'))return 'verdes'; // VERDES formato "Comentarios / Fecha de desembolso"
   if(H.includes('etapa'))return 'control';
   if(H.includes('segmento llenado datos'))return 'nuevos';
   if(H.includes('siguiente solicitud'))return 'renov';
@@ -673,13 +674,16 @@ function llenaVerdes(sheets,archivo){
     const sc=rows.length?jal.length/rows.length:0;if(jal.length&&(!best||sc>best.sc||(sc===best.sc&&jal.length>best.n)))best={sh,rows,sc,n:jal.length,iId,iR,H};}
   if(!best)throw new Error('No encontré filas de Jalisco en el archivo VERDES');
   const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  const H=best.H,iP=H.findIndex(h=>h.startsWith('porque no se envio')),iS=H.indexOf('status');
+  const H=best.H,f2=!H.some(h=>h.startsWith('porque no se envio'))&&H.includes('comentarios');
+  const iP=f2?H.indexOf('comentarios'):H.findIndex(h=>h.startsWith('porque no se envio')),iS=f2?H.indexOf('fecha de desembolso'):H.indexOf('status');
+  const nP=f2?'Comentarios':'Porque no se envio a mesa ?',nS=f2?'Fecha de desembolso':'STATUS';
+  const fd=x=>x?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):'';const col2=st_=>f2?((st_.cierre==='des'||st_.cierre==='desPC')?fd(st_.c.fdes||st_.fC||''):''):statusVerdes(st_);
   const mezclada=best.sc<1;let ok=0,sin=0,des=0;const iHR=H.indexOf('hoja region'),iSu=H.indexOf('sucursal');
   const ext=(r,k)=>[k+2,r&&iHR>=0?r[iHR]:'',r?r[best.iR]:'',r&&iSu>=0?String(r[iSu]||'').replace('CI-',''):''];
   // Todas las filas en su posición exacta (incluidas vacías), para pegar directo
   let last=0;best.sh.rows.forEach((r,k)=>{if(r&&r.some(v=>v!=null&&v!==''))last=k;});
   const all=Array.from({length:last+1},(_,k)=>best.sh.rows[k]||null);
-  const out=[mezclada?'Porque no se envio a mesa ?,STATUS,Solicitud_id (verificar),Fila en el archivo,Hoja región,Región,Sucursal,Qué pasó':'Solicitud_id,Porque no se envio a mesa ?,STATUS,Cliente (app),Fuente'];
+  const out=[mezclada?nP+','+nS+',Solicitud_id (verificar),Fila en el archivo,Hoja región,Región,Sucursal,Qué pasó':'Solicitud_id,'+nP+','+nS+',Cliente (app),Fuente'];
   // ¿Jalisco viene en un solo bloque? (hoja ordenada por región) → solo ese bloque, para pegar sin tocar a nadie
   const esJ=r=>r&&/JALISCO/i.test(String(r[best.iR]||''));const ixJ=all.map((r,k)=>esJ(r)?k:-1).filter(k=>k>=0);
   let bloques=0;ixJ.forEach((k,n)=>{if(n===0||k!==ixJ[n-1]+1)bloques++;});
@@ -691,13 +695,13 @@ function llenaVerdes(sheets,archivo){
     if(!r||!/^\d+$/.test(id)){out.push(mezclada?[P,S,id,...ext(r,k),r?'Fila con Solicitud_id raro: se deja igual':'Fila vacía'].map(q).join(','):',,,,Fila sin Solicitud_id');continue;}
     const jal=/JALISCO/i.test(String(r[best.iR]||''));
     if(mezclada&&!jal){out.push([P,S,id,...ext(r,k),'Otra región: se deja igual'].map(q).join(','));continue;}
-    if(DB.cuentas[id]){const st_=st(id);const stt=statusVerdes(st_);if(stt==='DESEMBOLSADO')des++;ok++;
+    if(DB.cuentas[id]){const st_=st(id);const stt=col2(st_);if(st_.cierre==='des'||st_.cierre==='desPC')des++;ok++;
       out.push((mezclada?[textoVerdes(st_),stt,id,...ext(r,k),'JALISCO: llenado desde la app']:[id,textoVerdes(st_),stt,st_.c.nombre,'App']).map(q).join(','));}
     else{sin++;out.push((mezclada?[P,S,id,...ext(r,k),'JALISCO: sin dato en la app, se deja igual']:[id,'','','','Sin dato en la app']).map(q).join(','));}
   }
   const b=new Blob(['﻿'+out.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='VERDES_JALISCO_llenado_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  return {ok,sin,des,total:ok+sin,mezclada,filas:all.length,hoja:best.sh.name||'',bloques,unBloque,desde:desde+2,hasta:hasta+2};
+  return {ok,sin,des,total:ok+sin,nP,nS,mezclada,filas:all.length,hoja:best.sh.name||'',bloques,unBloque,desde:desde+2,hasta:hasta+2};
 }
 
 function importFile(sheets,archivo){
@@ -779,7 +783,7 @@ $('#fx').onchange=async e=>{
       const porTipo={};for(const sh of sheets){const t=tipoHoja(sh.header);if(t)(porTipo[t]=porTipo[t]||[]).push(sh);}
       const tipos=Object.keys(porTipo);if(!tipos.length)throw new Error(f.name+': no reconozco este archivo');
       if(porTipo.verdes){const v=llenaVerdes(sheets,f.name);
-        toast(v.unBloque?`✔ VERDES: Jalisco viene en un solo bloque, filas ${v.desde} a ${v.hasta}\n${v.ok} llenadas desde la app (${v.des} desembolsadas) · ${v.sin} sin dato (se dejan como estaban)\nCopia las columnas A y B del CSV y pégalas en "Porque no se envio a mesa ?" y "STATUS" empezando en la fila ${v.desde}. No toca a ninguna otra región. Revisa que el Solicitud_id (col. C) coincida.\n(El archivo VERDES no se guarda en la app)`:v.mezclada?`⚠ VERDES: Jalisco viene revuelto con otras regiones (${v.bloques} pedazos separados), no se puede pegar solo lo de Jalisco.\nPide que ordenen la hoja por región ("Hoja región") y vuelve a cargarla: así sale en un solo bloque.\nSi no se puede: el CSV trae TODAS las filas (${v.filas}); pegar A y B completas regresa las celdas de otras regiones a como estaban en tu copia — solo hazlo con copia recién descargada y nadie más editando.`:`✔ VERDES: ${v.total} filas de Jalisco, en el mismo orden exacto de su hoja\n${v.ok} llenadas desde la app (${v.des} ya desembolsadas) · ${v.sin} sin dato\nCopia las columnas B y C del CSV y pégalas en "Porque no se envio a mesa ?" y "STATUS". Revisa que el Solicitud_id coincida.\n(El archivo VERDES no se guarda en la app)`,15000);
+        toast(v.unBloque?`✔ VERDES: Jalisco viene en un solo bloque, filas ${v.desde} a ${v.hasta}\n${v.ok} llenadas desde la app (${v.des} desembolsadas) · ${v.sin} sin dato (se dejan como estaban)\nCopia las columnas A y B del CSV y pégalas en "${v.nP}" y "${v.nS}" empezando en la fila ${v.desde}. No toca a ninguna otra región. Revisa que el Solicitud_id (col. C) coincida.\n(El archivo VERDES no se guarda en la app)`:v.mezclada?`⚠ VERDES: Jalisco viene revuelto con otras regiones (${v.bloques} pedazos separados), no se puede pegar solo lo de Jalisco.\nPide que ordenen la hoja por región ("Hoja región") y vuelve a cargarla: así sale en un solo bloque.\nSi no se puede: el CSV trae TODAS las filas (${v.filas}); pegar A y B completas regresa las celdas de otras regiones a como estaban en tu copia — solo hazlo con copia recién descargada y nadie más editando.`:`✔ VERDES: ${v.total} filas de Jalisco, en el mismo orden exacto de su hoja\n${v.ok} llenadas desde la app (${v.des} ya desembolsadas) · ${v.sin} sin dato\nCopia las columnas B y C del CSV y pégalas en "${v.nP}" y "${v.nS}". Revisa que el Solicitud_id coincida.\n(El archivo VERDES no se guarda en la app)`,15000);
         if(files.length===1)return;continue;}
       for(const t of tipos)lote.push({t,f,sheets:porTipo[t]});}
     lote.sort((x,y)=>PRIO[x.t]-PRIO[y.t]);
