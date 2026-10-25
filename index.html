@@ -143,7 +143,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -789,8 +789,9 @@ function visibles(){return Object.keys(DB.cuentas).filter(id=>inVista(DB.cuentas
 function fillVista(){
   const n=NIVEL(),pf=PERFIL()||{};const sucs=new Set();Object.values(DB.cuentas).forEach(c=>c.suc&&sucs.add(c.suc));Object.keys(DB.reg||{}).forEach(x=>sucs.add(x));
   const regs=[...new Set([...sucs].map(REG).filter(Boolean))].sort();const o=[];
-  const conSucs=r=>{o.push(['R:'+r,'Región '+tit(r)]);[...sucs].filter(x=>REG(x)===r).sort().forEach(x=>o.push([x,'\u00a0\u00a0· '+tit(x.replace('CI-',''))]));};
-  if(n==='admin'||n==='subdireccion'||!n){o.push(['GP','Subdirección (todas)']);regs.forEach(conSucs);[...sucs].filter(x=>!REG(x)).sort().forEach(x=>o.push([x,tit(x.replace('CI-',''))]));}
+  const conSucs=(r,abrir=true)=>{o.push(['R:'+r,(abrir?'▾ ':'▸ ')+'Región '+tit(r)]);if(abrir)[...sucs].filter(x=>REG(x)===r).sort().forEach(x=>o.push([x,'\u00a0\u00a0\u00a0· '+tit(x.replace('CI-',''))]));};
+  const regAct=VISTA.startsWith('R:')?VISTA.slice(2):REG(VISTA);
+  if(n==='admin'||n==='subdireccion'||!n){o.push(['GP','Subdirección (todas)']);regs.forEach(r=>conSucs(r,r===regAct));[...sucs].filter(x=>!REG(x)).sort().forEach(x=>o.push([x,tit(x.replace('CI-',''))]));}
   else if(n==='regional'&&pf.region)conSucs(pf.region);
   else if(pf.sucursal)o.push([pf.sucursal,tit(pf.sucursal.replace('CI-',''))]);
   let pref=VISTA;try{if(!localStorage.getItem(KEYV)&&pf.region)pref='R:'+pf.region;}catch(_){}
@@ -798,7 +799,7 @@ function fillVista(){
   $('#vista').innerHTML=o.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');
   $('#vista').value=VISTA;$('#vista').hidden=n==='gerente'||o.length<2;
 }
-$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.reg='';F.suc='';F.asesor='';A.reg='';A.suc='';A.ase='';render();};
+$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.reg='';F.suc='';F.asesor='';A.reg='';A.suc='';A.ase='';fillVista();render();};
 let TAB='lista';
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{TAB=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render();});
 $('#bMenu').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('on');};
