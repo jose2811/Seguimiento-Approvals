@@ -143,7 +143,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -163,6 +163,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
     <button id="mAdd" hidden>➕ Agregar approval por ID</button>
     <button id="mIni" hidden>📅 Inicio del seguimiento</button>
     <button id="mHist" hidden>🧾 Historial de cargas</button>
+    <button id="mEdit" hidden>✏️ Activar edición</button>
     <button id="mPwd">🔑 Cambiar mi contraseña</button>
     <button id="mReset" hidden>🔐 Restablecer contraseña de un usuario</button>
     <button id="mBorrar" style="color:#b91c1c">🚪 Cerrar sesión</button>
@@ -325,6 +326,7 @@ let VISTA=(()=>{try{return localStorage.getItem(KEYV)||'GP';}catch(e){return 'GP
 const REG=s=>(DB.reg&&DB.reg[s])||'';
 const tit=t=>String(t||'').toLowerCase().replace(/(^|\s)\S/g,x=>x.toUpperCase()).replace('Cdmx','CDMX');
 const NIVEL=()=>{const p=SES&&SES.perfil;return !p?'':p.es_gp?'admin':(p.rol||'gerente');};
+let EDITA=false;const RO=()=>NIVEL()==='consulta'||(NIVEL()==='subdireccion'&&!EDITA);
 const MULTI=()=>VISTA==='GP'||VISTA.startsWith('R:');
 const inVista=s=>VISTA==='GP'||(VISTA.startsWith('R:')?REG(s)===VISTA.slice(2):s===VISTA);
 const vistaNombre=()=>VISTA==='GP'?'Subdirección':VISTA.startsWith('R:')?'Región '+tit(VISTA.slice(2)):VISTA.replace('CI-','');
@@ -472,7 +474,7 @@ function aplicaPerfil(){
   if((n==='admin'||n==='subdireccion')&&pf&&pf.region&&!localStorage.getItem(KEYV))VISTA='R:'+pf.region;
   $('#vista').hidden=n==='gerente';$('#bImport').hidden=!gp;
   ['mImp','mIni','mHist','mVer','mAdd','mReset'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
-  $('#who').textContent=PERFIL()?PERFIL().nombre+({admin:' · admin',subdireccion:' · subdirección',regional:' · regional'}[NIVEL()]||''):'';if(NIVEL()==='consulta')$('#who').textContent+=' · solo consulta';
+  $('#who').textContent=PERFIL()?PERFIL().nombre+({admin:' · admin',subdireccion:' · subdirección',regional:' · regional'}[NIVEL()]||''):'';if(NIVEL()==='consulta')$('#who').textContent+=' · solo consulta';if(NIVEL()==='subdireccion')$('#who').textContent+=EDITA?' · ✏️ edición activa':' · 👁 solo ver';const me=document.getElementById('mEdit');if(me){me.hidden=NIVEL()!=='subdireccion';me.textContent=EDITA?'👁 Volver a solo ver':'✏️ Activar edición';}
   pintaSync();
 }
 setInterval(()=>{if(SES&&document.visibilityState==='visible')sincroniza(false);},120000);
@@ -480,7 +482,7 @@ document.addEventListener('visibilitychange',()=>{if(SES&&document.visibilitySta
 window.addEventListener('online',()=>{if(SES)sincroniza(false);});
 
 const quien=()=>PERFIL()?PERFIL().nombre:(VISTA==='GP'?'GP':VISTA);
-function addEv(id,e){if(NIVEL()==='consulta'){toast('Tu usuario es solo de consulta');return;}e.ts=new Date().toISOString();e.f=HOY;e.por=e.por||quien();e.uid=rid();queueEv(id,e);save();flush();}
+function addEv(id,e){if(RO()){toast(NIVEL()==='consulta'?'Tu usuario es solo de consulta':'Estás en modo solo ver: actívalo en ⋯ → Activar edición');return;}e.ts=new Date().toISOString();e.f=HOY;e.por=e.por||quien();e.uid=rid();queueEv(id,e);save();flush();}
 
 function blankR(){return {filas:0,acept:0,nuevos:0,act:0,des:0,mesa:0,ignored:0,viejas:0,hist:0,histYa:0};}
 function mkMap(header){
@@ -895,6 +897,7 @@ $('#mReset').onclick=async()=>{
         <div class="row"><button class="btn" id="rs_cp" type="button">📋 Copiar mensaje</button></div><p class="note">Mándasela por WhatsApp. Puede cambiarla en ⋯ → Cambiar mi contraseña.</p></div>`;
       $('#rs_cp').onclick=()=>{const t='Tu acceso a Approvals:\nUsuario: '+u+'\nContraseña: '+pw+'\nhttps://jose2811.github.io/Seguimiento-Approvals/';navigator.clipboard?navigator.clipboard.writeText(t).then(()=>toast('✔ Copiado'),()=>toast('Mantén presionado para copiar')):toast('Copia la contraseña manualmente');};}
     catch(e){$('#rs_err').textContent=(e.message||'').replace(/^HTTP \d+: /,'');$('#rs_ok').disabled=false;}};};
+$('#mEdit').onclick=()=>{if(!EDITA&&!confirm('¿Activar edición? Podrás mover etapas, comentar y rechazar cuentas. Al recargar la app vuelve a solo ver.'))return;EDITA=!EDITA;aplicaPerfil();toast(EDITA?'✏️ Edición activa':'👁 Modo solo ver');};
 $('#mPwd').onclick=()=>{openSheet(`<div class="shead"><h3>Cambiar mi contraseña</h3><button class="x" data-close>✕</button></div>
   <form class="form on" id="pw"><label>Nueva contraseña (mínimo 8)</label><input id="pw1" type="password" autocomplete="new-password">
   <label>Repítela</label><input id="pw2" type="password" autocomplete="new-password"><div class="err" id="pw_err"></div>
@@ -1033,7 +1036,7 @@ function card(s){
 /* ================= Detalle ================= */
 let CUR=null;
 let LOCK=false;
-function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;if(NIVEL()==='consulta'){$('#sheet').querySelectorAll('[data-f],.acts,.form:not(#lg):not(#pw)').forEach(x=>x.remove());}$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
+function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;if(RO()){$('#sheet').querySelectorAll('[data-f],.acts,.form:not(#lg):not(#pw)').forEach(x=>x.remove());}$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
 function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;}
 /* Al guardar: se cierra el detalle, la pantalla no se mueve y la tarjeta viaja visiblemente a su nuevo lugar */
 let MOVIDA=null;
@@ -1159,7 +1162,7 @@ function openDetalle(id){
 
   <h4>Historial (${s.evs.length})</h4>
   <ul class="tl">${tl}</ul>`);
-  if(NIVEL()==='consulta')return; // solo consulta: sin formularios ni acciones
+  if(RO())return; // solo ver: sin formularios ni acciones
   const sh=$('#sheet');
   sh.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{sh.querySelectorAll('.form').forEach(f=>f.classList.toggle('on',f.id==='f-'+b.dataset.f));$('#f-'+b.dataset.f).scrollIntoView({behavior:'smooth',block:'nearest'});});
   sh.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>b.closest('.form').classList.remove('on'));
