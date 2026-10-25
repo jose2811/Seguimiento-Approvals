@@ -143,7 +143,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -796,7 +796,8 @@ function fillVista(){
   else if(pf.sucursal)o.push([pf.sucursal,tit(pf.sucursal.replace('CI-',''))]);
   let pref=VISTA;try{if(!localStorage.getItem(KEYV)&&pf.region)pref='R:'+pf.region;}catch(_){}
   VISTA=o.some(x=>x[0]===pref)?pref:o.some(x=>x[0]===VISTA)?VISTA:(o[0]||[VISTA])[0];
-  $('#vista').innerHTML=o.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  const est=v=>v.startsWith('R:')&&v.slice(2)===regAct?' style="font-weight:700;background:#d9f3f1;color:#00585e"':v===VISTA?' style="font-weight:700"':(v==='GP'||v.startsWith('R:'))?' style="font-weight:600"':'';
+  $('#vista').innerHTML=o.map(([v,l])=>`<option value="${esc(v)}"${est(v)}>${esc(l)}</option>`).join('');
   $('#vista').value=VISTA;$('#vista').hidden=n==='gerente'||o.length<2;
 }
 $('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.reg='';F.suc='';F.asesor='';A.reg='';A.suc='';A.ase='';fillVista();render();};
