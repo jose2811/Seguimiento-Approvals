@@ -143,7 +143,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -472,7 +472,7 @@ function aplicaPerfil(){
   if((n==='admin'||n==='subdireccion')&&pf&&pf.region&&!localStorage.getItem(KEYV))VISTA='R:'+pf.region;
   $('#vista').hidden=n==='gerente';$('#bImport').hidden=!gp;
   ['mImp','mIni','mHist','mVer','mAdd','mReset'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!gp;});
-  $('#who').textContent=PERFIL()?PERFIL().nombre+({admin:' · admin',subdireccion:' · subdirección',regional:' · regional'}[NIVEL()]||''):'';
+  $('#who').textContent=PERFIL()?PERFIL().nombre+({admin:' · admin',subdireccion:' · subdirección',regional:' · regional'}[NIVEL()]||''):'';if(NIVEL()==='consulta')$('#who').textContent+=' · solo consulta';
   pintaSync();
 }
 setInterval(()=>{if(SES&&document.visibilityState==='visible')sincroniza(false);},120000);
@@ -480,7 +480,7 @@ document.addEventListener('visibilitychange',()=>{if(SES&&document.visibilitySta
 window.addEventListener('online',()=>{if(SES)sincroniza(false);});
 
 const quien=()=>PERFIL()?PERFIL().nombre:(VISTA==='GP'?'GP':VISTA);
-function addEv(id,e){e.ts=new Date().toISOString();e.f=HOY;e.por=e.por||quien();e.uid=rid();queueEv(id,e);save();flush();}
+function addEv(id,e){if(NIVEL()==='consulta'){toast('Tu usuario es solo de consulta');return;}e.ts=new Date().toISOString();e.f=HOY;e.por=e.por||quien();e.uid=rid();queueEv(id,e);save();flush();}
 
 function blankR(){return {filas:0,acept:0,nuevos:0,act:0,des:0,mesa:0,ignored:0,viejas:0,hist:0,histYa:0};}
 function mkMap(header){
@@ -791,7 +791,7 @@ function fillVista(){
   const regs=[...new Set([...sucs].map(REG).filter(Boolean))].sort();const o=[];
   const conSucs=(r,abrir=true)=>{o.push(['R:'+r,(abrir?'▾ ':'▸ ')+'Región '+tit(r)]);if(abrir)[...sucs].filter(x=>REG(x)===r).sort().forEach(x=>o.push([x,'\u00a0\u00a0\u00a0· '+tit(x.replace('CI-',''))]));};
   const regAct=VISTA.startsWith('R:')?VISTA.slice(2):REG(VISTA);
-  if(n==='admin'||n==='subdireccion'||!n){o.push(['GP','Subdirección (todas)']);regs.forEach(r=>conSucs(r,r===regAct));[...sucs].filter(x=>!REG(x)).sort().forEach(x=>o.push([x,tit(x.replace('CI-',''))]));}
+  if(n==='admin'||n==='subdireccion'||n==='consulta'||!n){o.push(['GP','Subdirección (todas)']);regs.forEach(r=>conSucs(r,r===regAct));[...sucs].filter(x=>!REG(x)).sort().forEach(x=>o.push([x,tit(x.replace('CI-',''))]));}
   else if(n==='regional'&&pf.region)conSucs(pf.region);
   else if(pf.sucursal)o.push([pf.sucursal,tit(pf.sucursal.replace('CI-',''))]);
   let pref=VISTA;try{if(!localStorage.getItem(KEYV)&&pf.region)pref='R:'+pf.region;}catch(_){}
@@ -1033,7 +1033,7 @@ function card(s){
 /* ================= Detalle ================= */
 let CUR=null;
 let LOCK=false;
-function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
+function openSheet(html,lock){LOCK=!!lock;$('#sheet').innerHTML=html;if(NIVEL()==='consulta'){$('#sheet').querySelectorAll('[data-f],.acts,.form:not(#lg):not(#pw)').forEach(x=>x.remove());}$('#ov').classList.add('on');$('#sheet').querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeSheet());}
 function closeSheet(force){if(LOCK&&force!==true)return;LOCK=false;$('#ov').classList.remove('on');CUR=null;}
 /* Al guardar: se cierra el detalle, la pantalla no se mueve y la tarjeta viaja visiblemente a su nuevo lugar */
 let MOVIDA=null;
@@ -1159,6 +1159,7 @@ function openDetalle(id){
 
   <h4>Historial (${s.evs.length})</h4>
   <ul class="tl">${tl}</ul>`);
+  if(NIVEL()==='consulta')return; // solo consulta: sin formularios ni acciones
   const sh=$('#sheet');
   sh.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{sh.querySelectorAll('.form').forEach(f=>f.classList.toggle('on',f.id==='f-'+b.dataset.f));$('#f-'+b.dataset.f).scrollIntoView({behavior:'smooth',block:'nearest'});});
   sh.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>b.closest('.form').classList.remove('on'));
