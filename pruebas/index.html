@@ -155,7 +155,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1020,6 +1020,8 @@ function renderLista(){
   document.querySelectorAll('.card').forEach(el=>el.onclick=()=>openDetalle(el.dataset.id));
 }
 function aCls(d){return d>30?'30':d>14?'15':d>7?'8':'0';}
+/* Resultado de mesa según el sistema ("Estatus análisis" de Nuevos / Renovaciones) */
+const pillMres=s=>s.c.mres==='A'?'<span class="pill sis" style="background:#15803d">Sistema: ✔ autorizado por mesa</span>':'<span class="pill sis" style="background:#b91c1c">Sistema: ✖ no autorizado por mesa</span>';
 function estadoPills(s,full){
   if(full===undefined)full=!SIMPLE();
   let h='';
@@ -1032,10 +1034,12 @@ function estadoPills(s,full){
   if(!full){ // modo sencillo: una sola alerta, la más importante
     if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
     else if(s.incum)h+=`<span class="pill rep">✖ ${s.incum} incumplido${s.incum>1?'s':''}</span>`;
+    else if(s.abierto&&s.c.mres)h+=pillMres(s);
     else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e'&&!s.sisMesa)h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
     return h;}
   if(s.repros)h+=`<span class="pill ${s.repros>=3?'rep3':'rep'}">↻ ${s.repros} ${s.repros===1?'vez':'veces'}</span>`;
-  if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
+  if(s.abierto&&s.c.mres)h+=pillMres(s);
+  else if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
   else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
   if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
   if(s.reacs)h+=`<span class="pill rea">↺ reactivada${s.reacs>1?' '+s.reacs+'×':''}</span>`;
@@ -1381,7 +1385,7 @@ const EMB=[
   ['seg','En seguimiento','visita, validación o reagendado · gerente','#7dd3c8'],
   ['subir','Por subir a mesa','según gerente','#2dd4bf'],
   ['mesa','En mesa','sistema + gerente','#14b8a6'],
-  ['aut','Autorizado, por desembolsar','mesa autorizó (sistema) + gerente','#0d9488'],
+  ['aut','Autorizado, por desembolsar','mesa autorizó (sistema) o el gerente lo puso en "Por desembolsar"','#0d9488'],
   ['des','Desembolsado','sistema','#15803d'],
   ['rech','Rechazado','gerente con motivo · mesa (sistema)','#b91c1c'],
 ];
