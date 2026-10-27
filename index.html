@@ -154,7 +154,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.5</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.6</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -767,7 +767,7 @@ const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
 const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
   const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
-  let mesaG=false,mesaH=false;let open=null;let fMesaS='',fMesaG='',mesaAlta=false;const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
+  let mesaG=false,mesaH=false;let open=null;let fMesaS='',fMesaG='',mesaAlta=false,fEt='';const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
     const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
@@ -784,6 +784,7 @@ function st(id){
         else res=ef<=open.fprog?'cumplido':'tarde';
         if(res){const x={res,f:ef,fprog:open.fprog,etapa:open.etapa,dias:dd(open.fprog,ef)};cal.push(x);calU[e.uid||e.ts]=x;}}
       open=null;}
+    if(e.t==='etapa'||e.t==='repro'||e.t==='reac')fEt=ef;
     if(e.t==='etapa'||e.t==='repro'){etapa=e.etapa;fprog=e.fprog||(e.hist&&e.f>(c.alta||'')?e.f:'');falta=e.falta||'';if(e.t==='repro')repros++;if(ETAPA_MESA.includes(e.etapa)){mesa=true;mesaG=true;}}
     if(e.mesa){mesa=true;mesaH=true;}
     if(e.t==='reasig'){reasigs++;asesorPrev=e.de;asesorAct=e.a;fAsig=e.f;}
@@ -809,7 +810,8 @@ function st(id){
   const fMesa=sisMesa?(fMesaS||(mesaAlta||c.anal||c.ll==='d'?'':fMesaG)):fMesaG;
   const diasMesa=fMesa?Math.max(0,dd(fMesa,HOY)):dias,mesaAprox=!fMesa;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
-  const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
+  // No cuadra: el gerente dice que subió a mesa pero el sistema no lo muestra. (a) el sistema dice que ni terminó el llenado, o (b) dice "En mesa" / "Por desembolsar" y a los 2 días el sistema sigue sin verla en mesa (el funnel llega con 1 día de atraso)
+  const desac=!cierre&&!sisMesa&&c.mres!=='A'&&((GER_MESA.includes(etapa)&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa')))||(ETAPA_MESA.includes(etapa)&&!!fEt&&dd(fEt,HOY)>=2));
   return {c,evs,diasMesa,mesaAprox,fMesa,mesaFuente,fC,diasCierre,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>inVista(DB.cuentas[id].suc)).map(st);}
@@ -942,7 +944,7 @@ $('#bSync').onclick=()=>sincroniza(false);
 /* ================= Lista ================= */
 const SIMPLE=()=>NIVEL()==='gerente';
 const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
-const FILTROS_SIMPLE_SI_HAY=['f_mesa10','f_sinmot']; // solo aparece mientras haya algo que limpiar
+const FILTROS_SIMPLE_SI_HAY=['f_desac','f_mesa10','f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
 const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null,ord:'',lim:300,_k:''};
@@ -978,7 +980,7 @@ function renderLista(){
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
   const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
-  const fn=F.emb?(s=>embDe(s)===F.emb.k):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
+  const fn=F.emb?(s=>embDe(s)===F.emb.k&&(!F.emb.desac||s.desac)):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
   // Se muestran de 300 en 300 para que no se trabe el celular; con "Ver más" se llega a todas. El orden y el exportar siempre cubren la lista completa.
@@ -1010,7 +1012,7 @@ function renderLista(){
     <div class="kpi ${k.rep?'warn':''}" data-q="f_rep"><b>${k.rep}</b><span>↻ 2+ veces</span></div>
   </div>`}
   <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
-  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}</b><br><small style="color:var(--mut)">Aceptados con solicitud ${esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
+  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}${F.emb.desac?' · ⚠ solo según gerente':''}</b><br><small style="color:var(--mut)">Aceptados con solicitud ${esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
   <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]&&!F.emb?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${regsL.length>1?`<select id="fReg"><option value="">Todas las regiones</option>${regsL.map(x=>`<option value="${esc(x)}" ${F.reg===x?'selected':''}>${esc(tit(x))}</option>`).join('')}</select>`:''}
@@ -1439,9 +1441,9 @@ function renderEmb(){
   EMB_LIST=scope;
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const T=cnt(scope),N=scope.length,max=Math.max(1,...EMB.map(x=>T[x[0]]));
-  const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
+  const desacK=k=>scope.filter(s=>embDe(s)===k&&s.desac).length;const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
   const sc0={reg:E.reg,suc:E.suc,ase:E.ase};
-  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
+  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${(x[0]==='mesa'||x[0]==='aut')&&desacK(x[0])?`<small class="dsc" data-dk="${x[0]}" style="display:block;color:var(--bad);font-weight:700">⚠ ${desacK(x[0])} solo según gerente: el sistema no lo confirma ›</small>`:''}${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
   // tabla un nivel abajo
   let gk=null,gName,gAttr,gT='';
   if(E.ase){gk=null;}
@@ -1482,6 +1484,7 @@ function renderEmb(){
   if($('#eBack'))$('#eBack').onclick=()=>{if(E.ase)E.ase='';else if(E.suc)E.suc='';else E.reg='';renderEmb();};
   if($('#eCsv'))$('#eCsv').onclick=exportaCSV;
   el.querySelectorAll('.erow[data-k]').forEach(d=>d.onclick=()=>{if(T[d.dataset.k])irPend(d.dataset.k,sc0);});
+  el.querySelectorAll('.dsc').forEach(d=>d.onclick=ev=>{ev.stopPropagation();irPend(d.dataset.dk,sc0);F.emb.desac=true;renderLista();});
   const m10=el.querySelector('.m10');if(m10)m10.onclick=ev=>{ev.stopPropagation();F.emb=null;F.reg=sc0.reg||'';F.suc=sc0.suc||'';F.asesor=sc0.ase||'';F.txt='';F.seg='';F.q='f_mesa10';irTab('lista');};
   el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
   el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOf(td.dataset.gk):sc0));
