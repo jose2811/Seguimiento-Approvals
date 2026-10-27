@@ -111,6 +111,7 @@ h4.secc{margin:12px 2px 6px;font-size:12px;color:#334155;text-transform:none;let
 .tl .com{font-size:12px;color:#374151;background:#f9fafb;border-radius:6px;padding:4px 6px;margin-top:3px}
 h4{margin:14px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut)}
 /* concentrado */
+#upd{font-size:12px;text-align:center;padding:5px 10px;border-bottom:1px solid var(--line)}#upd.ok{background:#ecfdf5;color:#065f46}#upd.old{background:#fef3c7;color:#92400e}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
 .erow{display:grid;grid-template-columns:1fr auto 14px;grid-template-areas:'l n g' 'b b g';gap:2px 10px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;align-items:center}
 .erow:hover{background:#f8fafc}.erow.e0{opacity:.5;cursor:default}
@@ -154,7 +155,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.6</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.7</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -184,6 +185,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <input type="file" id="fx" accept=".xlsx" multiple hidden>
 <input type="file" id="fj" accept=".json,application/json" hidden>
 
+<div id="upd" hidden></div>
 <main>
   <section id="vLista"></section>
   <section id="vApv" hidden></section>
@@ -967,7 +969,12 @@ const FILTROS=[
   ['f_cerr','Cerrados',s=>!s.abierto&&(ES_GP()||!s.fC||s.fC>=addDays(HOY,-30))],
 ];
 if(!VER_DIAS_MESA)FILTROS.splice(FILTROS.findIndex(f=>f[0]==='f_mesa10'),1);
-function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vApv').hidden=TAB!=='apv';$('#vConc').hidden=TAB!=='conc';$('#vEmb').hidden=TAB!=='emb';TAB==='lista'?renderLista():TAB==='apv'?renderApv():TAB==='emb'?renderEmb():renderConc();}
+/* Franja de "¿ya está actualizado?": sale de la última carga del funnel (se guarda en config, la ven todos) */
+function pintaUpd(){const el=$('#upd');if(!el)return;const D=DB.cfg&&DB.cfg.apv;if(!D||!D.ts){el.hidden=true;return;}
+  const d=new Date(D.ts),f=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10),hoy=f===HOY,h=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  el.hidden=false;el.className=hoy?'ok':'old';
+  el.innerHTML=hoy?`🟢 <b>Actualizado hoy</b> a las ${h} · datos al cierre del ${fmt(D.fmax)}`:`🟡 <b>Aún no se cargan los archivos de hoy</b> · última carga: ${fmt(f)} ${h} (datos al cierre del ${fmt(D.fmax)})`;}
+function render(){HOY=hoyISO();pintaUpd();$('#vLista').hidden=TAB!=='lista';$('#vApv').hidden=TAB!=='apv';$('#vConc').hidden=TAB!=='conc';$('#vEmb').hidden=TAB!=='emb';TAB==='lista'?renderLista():TAB==='apv'?renderApv():TAB==='emb'?renderEmb():renderConc();}
 function renderLista(){
   const all=visibles();
   if(!all.length&&!ES_GP()){$('#vLista').innerHTML=`<div class="empty"><b>Sin cuentas por ahora</b><br>Aquí aparecen los aceptados de tu sucursal en cuanto José carga el funnel.</div>`;return;}
