@@ -154,7 +154,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.5</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -210,6 +210,7 @@ const ETAPAS={
 };
 const ETAPA_MESA=['En mesa','Por desembolsar'];
 const MESA_DIAS=10; // en mesa más de esto = preguntar qué pasó
+const VER_DIAS_MESA=false; // oculto mientras se juntan fechas reales de entrada a mesa (desde 27 oct 2026); el registro sigue corriendo. Prender a mediados de nov.
 /* nombres del control en Excel -> etapas de la app */
 const ETAPA_XL={'visita asesor':'Visita asesor','validacion gerente':'Validación gerente','se sube a mesa':'Se sube a mesa','en mesa':'En mesa','por desembolsar':'Por desembolsar','reagendado':'Reagendado'};
 const MOT_REASIG=['Asesor ya no labora / cartera heredada','Asesor sin seguimiento (no se involucra)','Cliente pide otro asesor','Otro'];
@@ -681,7 +682,7 @@ function exportaCSV(){
   const lines=[cols.join(',')];
   for(const s of rows){const c=s.c;
     lines.push([c.id,c.nombre,c.suc,s.asesorAct,c.tipo,(c.seg||'').replace(/^\S+\)\s*/,''),c.fsol,s.dias,(c.est||'').replace(/^\S+\)\s*/,''),c.ll?LLEN[c.ll]:'',s.etapa||'Sin gestión',s.fprog,s.repros||'',s.lastCom,s.lastComF,
-      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':'',embDe(s)==='mesa'?s.diasMesa+(s.mesaAprox?' (desde solicitud)':''):''].map(q).join(','));}
+      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':'',embDe(s)==='mesa'&&VER_DIAS_MESA?s.diasMesa+(s.mesaAprox?' (desde solicitud)':''):''].map(q).join(','));}
   const b=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='approvals_'+norm(vistaNombre()).replace(/\s+/g,'_')+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   toast('✔ Exportadas '+rows.length+' cuentas (lo que tienes filtrado en pantalla). Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
@@ -963,6 +964,7 @@ const FILTROS=[
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
   ['f_cerr','Cerrados',s=>!s.abierto&&(ES_GP()||!s.fC||s.fC>=addDays(HOY,-30))],
 ];
+if(!VER_DIAS_MESA)FILTROS.splice(FILTROS.findIndex(f=>f[0]==='f_mesa10'),1);
 function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vApv').hidden=TAB!=='apv';$('#vConc').hidden=TAB!=='conc';$('#vEmb').hidden=TAB!=='emb';TAB==='lista'?renderLista():TAB==='apv'?renderApv():TAB==='emb'?renderEmb():renderConc();}
 function renderLista(){
   const all=visibles();
@@ -1037,7 +1039,7 @@ function renderLista(){
 function aCls(d){return d>30?'30':d>14?'15':d>7?'8':'0';}
 /* Resultado de mesa según el sistema ("Estatus análisis" de Nuevos / Renovaciones) */
 const pillMres=s=>s.c.mres==='A'?'<span class="pill sis" style="background:#15803d">Sistema: ✔ autorizado por mesa</span>':'<span class="pill sis" style="background:#b91c1c">Sistema: ✖ no autorizado por mesa</span>';
-const pillMesa=s=>{const t=s.diasMesa>=MESA_DIAS;return `<span class="pill sis" style="${t?'background:#b45309':''}" title="${s.mesaAprox?'Ya estaba en mesa cuando empezó el seguimiento: no se sabe cuándo entró, se cuenta desde la solicitud':'En mesa desde el '+fmt(s.fMesa,false)}">Sistema: en mesa · ${s.mesaAprox?s.diasMesa+'d desde solicitud':s.diasMesa+(s.diasMesa===1?' día':' días')}${t?' ⚠':''}</span>`;};
+const pillMesa=s=>{if(!VER_DIAS_MESA)return '<span class="pill sis">Sistema: en mesa</span>';const t=s.diasMesa>=MESA_DIAS;return `<span class="pill sis" style="${t?'background:#b45309':''}" title="${s.mesaAprox?'Ya estaba en mesa cuando empezó el seguimiento: no se sabe cuándo entró, se cuenta desde la solicitud':'En mesa desde el '+fmt(s.fMesa,false)}">Sistema: en mesa · ${s.mesaAprox?s.diasMesa+'d desde solicitud':s.diasMesa+(s.diasMesa===1?' día':' días')}${t?' ⚠':''}</span>`;};
 function estadoPills(s,full){
   if(full===undefined)full=!SIMPLE();
   let h='';
@@ -1439,7 +1441,7 @@ function renderEmb(){
   const T=cnt(scope),N=scope.length,max=Math.max(1,...EMB.map(x=>T[x[0]]));
   const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
   const sc0={reg:E.reg,suc:E.suc,ase:E.ase};
-  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0]==='mesa'&&mesa10?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
+  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
   // tabla un nivel abajo
   let gk=null,gName,gAttr,gT='';
   if(E.ase){gk=null;}
