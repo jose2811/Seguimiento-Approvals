@@ -154,7 +154,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -209,6 +209,7 @@ const ETAPAS={
   'Reagendado':{fecha:'opt',comReq:true}
 };
 const ETAPA_MESA=['En mesa','Por desembolsar'];
+const MESA_DIAS=10; // en mesa más de esto = preguntar qué pasó
 /* nombres del control en Excel -> etapas de la app */
 const ETAPA_XL={'visita asesor':'Visita asesor','validacion gerente':'Validación gerente','se sube a mesa':'Se sube a mesa','en mesa':'En mesa','por desembolsar':'Por desembolsar','reagendado':'Reagendado'};
 const MOT_REASIG=['Asesor ya no labora / cartera heredada','Asesor sin seguimiento (no se involucra)','Cliente pide otro asesor','Otro'];
@@ -675,12 +676,12 @@ function exportaCSV(){
   // Se exporta exactamente lo que está en pantalla: Embudo → su rango y nivel; Pendientes (o cualquier otra pestaña) → la lista con sus filtros
   const rows=TAB==='emb'&&EMB_LIST?EMB_LIST:(LAST_LIST||visibles());
   if(!rows.length)return toast('No hay cuentas en lo que tienes filtrado');
-  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza','Región','Paso en el embudo','Resultado mesa (sistema)'];
+  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza','Región','Paso en el embudo','Resultado mesa (sistema)','Días en mesa'];
   const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const lines=[cols.join(',')];
   for(const s of rows){const c=s.c;
     lines.push([c.id,c.nombre,c.suc,s.asesorAct,c.tipo,(c.seg||'').replace(/^\S+\)\s*/,''),c.fsol,s.dias,(c.est||'').replace(/^\S+\)\s*/,''),c.ll?LLEN[c.ll]:'',s.etapa||'Sin gestión',s.fprog,s.repros||'',s.lastCom,s.lastComF,
-      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':''].map(q).join(','));}
+      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':'',embDe(s)==='mesa'?s.diasMesa+(s.mesaAprox?' (desde solicitud)':''):''].map(q).join(','));}
   const b=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='approvals_'+norm(vistaNombre()).replace(/\s+/g,'_')+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   toast('✔ Exportadas '+rows.length+' cuentas (lo que tienes filtrado en pantalla). Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
@@ -765,12 +766,15 @@ const evKey=e=>(e.t==='alta'?'0':e.hist?'1':'2')+e.ts;
 const ordenEv=a=>[...a].sort((x,y)=>evKey(x).localeCompare(evKey(y)));
 function st(id){
   const c=DB.cuentas[id],evs=ordenEv(DB.ev[id]||[]);
-  let mesaG=false,mesaH=false;let open=null;const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
+  let mesaG=false,mesaH=false;let open=null;let fMesaS='',fMesaG='',mesaAlta=false;const cal=[],calU={};let reacs=0,rechPrev='',fSisDes='';
   let etapa='',fprog='',falta='',repros=0,reasigs=0,asesorAct='',fAsig='',asesorPrev='',lastG='',lastCom='',lastComF='',monto=null,rech=null,mesa=false,desG=null;
   for(const e of evs){
     const ef=e.hist&&c.alta&&e.f>c.alta?c.alta:e.f;
     // ¿Este movimiento resuelve el compromiso abierto? (solo se califica lo capturado en la app o el desembolso del sistema)
     const sisDesEv=e.t==='sis'&&/DESEMB/i.test(e.est||'');if(sisDesEv)fSisDes=e.f;
+    if(e.t==='alta'&&/MESA/i.test(e.est||''))mesaAlta=true;
+    if(e.t==='sis'&&/MESA/i.test(e.est||'')&&!fMesaS)fMesaS=e.f; // día en que la carga vio el cambio a mesa
+    if((e.t==='etapa'||e.t==='repro')&&(e.etapa==='En mesa'||e.etapa==='Por desembolsar'||e.etapa==='Se sube a mesa')&&!fMesaG&&!e.hist)fMesaG=ef;
     if(open&&(e.t==='etapa'||e.t==='repro'||e.t==='des'||e.t==='rech'||sisDesEv)){
       if(!e.hist){let res;
         if(e.t==='repro'||(e.t==='etapa'&&e.etapa==='Reagendado'))res=ef<=open.fprog?'atiempo':'incumplido';
@@ -800,9 +804,12 @@ function st(id){
   const incum=cal.filter(x=>x.res==='incumplido').length;
   let fC='';if(cierre==='des')fC=c.fdes||fSisDes||(desG&&desG.f)||'';else if(cierre==='desPC')fC=desG.f;else if(cierre==='rech')fC=rech.hist&&c.alta&&rech.f>c.alta?c.alta:rech.f;
   const diasCierre=fC&&c.fsol?Math.max(0,dd(c.fsol,fC)):null;
+  // Días en mesa: desde que el sistema la marcó en mesa (o el gerente la subió). Si ya estaba en mesa al darse de alta, no se sabe cuándo entró → se cuenta desde la solicitud (aprox.)
+  const fMesa=sisMesa?(fMesaS||(mesaAlta||c.anal||c.ll==='d'?'':fMesaG)):fMesaG;
+  const diasMesa=fMesa?Math.max(0,dd(fMesa,HOY)):dias,mesaAprox=!fMesa;
   const conflicto=sisDes&&rech; // estaba rechazado por gerente pero el sistema lo desembolsó
   const desac=!cierre&&GER_MESA.includes(etapa)&&!sisMesa&&(c.ll==='a'||c.ll==='b'||(c.ll==='c'&&etapa!=='Se sube a mesa'));
-  return {c,evs,mesaFuente,fC,diasCierre,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
+  return {c,evs,diasMesa,mesaAprox,fMesa,mesaFuente,fC,diasCierre,cal,calU,incum,reacs,rechPrev,desac,reasigs,asesorAct,asesorPrev,fAsig,diasAs,etapa,fprog,falta,repros,lastCom,lastComF,monto,rech,mesa,desG,cierre,dias,sinMov,venc,hoyC,sisMesa,conflicto,abierto:!cierre,sinGestion:!etapa&&!cierre,seg:segL(c.seg)};
 }
 function visibles(){return Object.keys(DB.cuentas).filter(id=>inVista(DB.cuentas[id].suc)).map(st);}
 
@@ -934,7 +941,7 @@ $('#bSync').onclick=()=>sincroniza(false);
 /* ================= Lista ================= */
 const SIMPLE=()=>NIVEL()==='gerente';
 const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
-const FILTROS_SIMPLE_SI_HAY=['f_sinmot']; // solo aparece mientras haya algo que limpiar
+const FILTROS_SIMPLE_SI_HAY=['f_mesa10','f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
 const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null,ord:'',lim:300,_k:''};
@@ -950,6 +957,7 @@ const FILTROS=[
   ['f_desac','⚠ No cuadra con sistema',s=>s.desac],
   ['f_noini','Sistema: no inició',s=>s.abierto&&s.c.ll==='a'],
   ['f_incum','✖ Con incumplidos',s=>s.abierto&&s.incum>0],
+  ['f_mesa10','🕒 En mesa +'+MESA_DIAS+' días',s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS],
   ['f_sinmot','Rechazados sin motivo',s=>s.cierre==='rech'&&s.rech.cat===CAT_SC],
   ['f_reas','↔ Reasignadas',s=>s.reasigs>0],
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
@@ -973,6 +981,7 @@ function renderLista(){
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
   // Se muestran de 300 en 300 para que no se trabe el celular; con "Ver más" se llega a todas. El orden y el exportar siempre cubren la lista completa.
   const fk=JSON.stringify([VISTA,F.q,F.reg,F.suc,F.asesor,F.seg,F.txt,F.emb,F.ord]);if(fk!==F._k){F._k=fk;F.lim=300;}
+  if(F.q==='f_mesa10'||(F.emb&&F.emb.k==='mesa'))list.sort((a,b)=>b.diasMesa-a.diasMesa);
   if(F.ord==='rec')list.sort((a,b)=>(b.c.fsol||'').localeCompare(a.c.fsol||'')||(b.venc-a.venc));
   LAST_LIST=list;const shown=list.slice(0,F.lim);
   const corto=n=>{const t=String(n||'').trim().split(/\s+/);if(t.length<2)return tc(t[0]||'');return tc(t[0])+' '+tc(t.length>=4?t[2]:t[1]);};
@@ -1028,6 +1037,7 @@ function renderLista(){
 function aCls(d){return d>30?'30':d>14?'15':d>7?'8':'0';}
 /* Resultado de mesa según el sistema ("Estatus análisis" de Nuevos / Renovaciones) */
 const pillMres=s=>s.c.mres==='A'?'<span class="pill sis" style="background:#15803d">Sistema: ✔ autorizado por mesa</span>':'<span class="pill sis" style="background:#b91c1c">Sistema: ✖ no autorizado por mesa</span>';
+const pillMesa=s=>{const t=s.diasMesa>=MESA_DIAS;return `<span class="pill sis" style="${t?'background:#b45309':''}" title="${s.mesaAprox?'Ya estaba en mesa cuando empezó el seguimiento: no se sabe cuándo entró, se cuenta desde la solicitud':'En mesa desde el '+fmt(s.fMesa,false)}">Sistema: en mesa · ${s.mesaAprox?s.diasMesa+'d desde solicitud':s.diasMesa+(s.diasMesa===1?' día':' días')}${t?' ⚠':''}</span>`;};
 function estadoPills(s,full){
   if(full===undefined)full=!SIMPLE();
   let h='';
@@ -1041,11 +1051,12 @@ function estadoPills(s,full){
     if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
     else if(s.incum)h+=`<span class="pill rep">✖ ${s.incum} incumplido${s.incum>1?'s':''}</span>`;
     else if(s.abierto&&s.c.mres)h+=pillMres(s);
+    else if(s.abierto&&s.sisMesa)h+=pillMesa(s);
     else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e'&&!s.sisMesa)h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
     return h;}
   if(s.repros)h+=`<span class="pill ${s.repros>=3?'rep3':'rep'}">↻ ${s.repros} ${s.repros===1?'vez':'veces'}</span>`;
   if(s.abierto&&s.c.mres)h+=pillMres(s);
-  else if(s.sisMesa&&s.abierto)h+=`<span class="pill sis">Sistema: en mesa</span>`;
+  else if(s.sisMesa&&s.abierto)h+=pillMesa(s);
   else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')h+=`<span class="pill sis">Sistema: ${LLEN[s.c.ll]}</span>`;
   if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
   if(s.reacs)h+=`<span class="pill rea">↺ reactivada${s.reacs>1?' '+s.reacs+'×':''}</span>`;
@@ -1426,9 +1437,9 @@ function renderEmb(){
   EMB_LIST=scope;
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const T=cnt(scope),N=scope.length,max=Math.max(1,...EMB.map(x=>T[x[0]]));
-  const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
+  const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
   const sc0={reg:E.reg,suc:E.suc,ase:E.ase};
-  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small></div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
+  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0]==='mesa'&&mesa10?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
   // tabla un nivel abajo
   let gk=null,gName,gAttr,gT='';
   if(E.ase){gk=null;}
@@ -1469,6 +1480,7 @@ function renderEmb(){
   if($('#eBack'))$('#eBack').onclick=()=>{if(E.ase)E.ase='';else if(E.suc)E.suc='';else E.reg='';renderEmb();};
   if($('#eCsv'))$('#eCsv').onclick=exportaCSV;
   el.querySelectorAll('.erow[data-k]').forEach(d=>d.onclick=()=>{if(T[d.dataset.k])irPend(d.dataset.k,sc0);});
+  const m10=el.querySelector('.m10');if(m10)m10.onclick=ev=>{ev.stopPropagation();F.emb=null;F.reg=sc0.reg||'';F.suc=sc0.suc||'';F.asesor=sc0.ase||'';F.txt='';F.seg='';F.q='f_mesa10';irTab('lista');};
   el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
   el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOf(td.dataset.gk):sc0));
 }
