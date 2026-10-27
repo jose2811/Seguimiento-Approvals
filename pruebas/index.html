@@ -22,9 +22,13 @@ header{background:#000;border-bottom:2px solid var(--brand);color:#fff;padding:1
 .hbtn.warn{background:#f59e0b;border-color:#f59e0b;color:#111}
 .hbtn{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(0,175,162,.55);border-radius:8px;padding:6px 10px;cursor:pointer}
 .hsel{background:#fff;color:var(--ink);border:0;border-radius:8px;padding:6px 8px;max-width:180px}
-.tabs{display:flex;gap:4px;margin-top:8px}
-.tab{flex:1;background:transparent;color:#9ca3af;border:0;border-bottom:3px solid transparent;padding:8px 4px;cursor:pointer;font-weight:600}
-.tab.on{color:#fff;border-bottom-color:var(--brand)}
+.tabs{display:flex;gap:4px;margin-top:10px;padding:0 2px}
+.tab{flex:1;min-width:0;background:#1f2937;color:#cbd5e1;border:1px solid #374151;border-bottom:0;border-radius:10px 10px 0 0;padding:8px 2px 7px;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s}
+.tab:hover{background:#2b3646;color:#fff}
+.tab.on{background:var(--bg);color:var(--ink);border-color:var(--brand);border-top:3px solid var(--brand);padding-top:6px;margin-bottom:-2px;position:relative;z-index:1;font-weight:700}
+.tab .ti{margin-right:3px}
+@media (max-width:430px){.tab .ti{display:none}.tab{font-size:12.5px}}
+@media (max-width:380px){.tabs{gap:3px}.tab{font-size:11.5px;padding-left:0;padding-right:0;letter-spacing:-.2px}}
 main{padding:10px 10px 40px;max-width:900px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .kpi{background:var(--card);border-radius:10px;padding:8px 6px;text-align:center;border:1px solid var(--line);cursor:pointer}
@@ -151,17 +155,17 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
     <button class="hbtn" id="bMenu">⋯</button>
   </div>
   <div class="tabs">
-    <button class="tab on" data-tab="lista">Pendientes</button>
-    <button class="tab" data-tab="apv">Approvals</button>
-    <button class="tab" data-tab="emb">Embudo</button>
-    <button class="tab" data-tab="conc">Concentrado</button>
+    <button class="tab on" data-tab="lista"><span class="ti">📋</span>Pendientes</button>
+    <button class="tab" data-tab="apv"><span class="ti">📈</span>Approvals</button>
+    <button class="tab" data-tab="emb"><span class="ti">🔻</span>Embudo</button>
+    <button class="tab" data-tab="conc"><span class="ti">📊</span>Concentrado</button>
   </div>
   <div class="menu" id="menu">
     <button id="mCsv">📤 Exportar a Excel (CSV)</button>
