@@ -108,6 +108,13 @@ h4.secc{margin:12px 2px 6px;font-size:12px;color:#334155;text-transform:none;let
 h4{margin:14px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut)}
 /* concentrado */
 .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.erow{display:grid;grid-template-columns:1fr auto 14px;grid-template-areas:'l n g' 'b b g';gap:2px 10px;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer;align-items:center}
+.erow:hover{background:#f8fafc}.erow.e0{opacity:.5;cursor:default}
+.erow .el{grid-area:l}.erow .el b{display:block;font-size:14px}.erow .el small,.erow .en small{font-size:11px;color:var(--mut)}
+.erow .en{grid-area:n;text-align:right}.erow .en b{font-size:20px;margin-right:6px}
+.erow .eb{grid-area:b;height:8px;background:#eef2f7;border-radius:4px;overflow:hidden}.erow .eb i{display:block;height:100%;border-radius:4px}
+.erow .ego{grid-area:g;color:var(--mut);font-size:18px}
+.etab td.lk{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .panel h3{margin:0 0 8px;font-size:15px}
 .tw{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:12px}
@@ -143,7 +150,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.0.4</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -152,6 +159,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
   <div class="tabs">
     <button class="tab on" data-tab="lista">Pendientes</button>
     <button class="tab" data-tab="apv">Approvals</button>
+    <button class="tab" data-tab="emb">Embudo</button>
     <button class="tab" data-tab="conc">Concentrado</button>
   </div>
   <div class="menu" id="menu">
@@ -175,6 +183,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <main>
   <section id="vLista"></section>
   <section id="vApv" hidden></section>
+  <section id="vEmb" hidden></section>
   <section id="vConc" hidden></section>
 </main>
 <footer>created by Joe Fdz &amp; Claude !!</footer>
@@ -611,10 +620,13 @@ function tipoHoja(header){const H=header.map(norm);
   return null;}
 const PRIO={control:0,funnel:1,nuevos:2,renov:3};
 const NOMBRE_TIPO={control:'Control',funnel:'Funnel',nuevos:'Nuevos',renov:'Renovaciones'};
+/* "Estatus análisis" de Nuevos / Renovaciones */
+const mresDe=v=>{v=norm(v);return v==='autorizado'?'A':v==='no autorizado'?'N':'';};
 function enriquece(c,id,x,r){
   const antes=JSON.stringify(c);
   if(x.ll)c.ll=x.ll;
   if(x.ent==='SI')c.anal=1;
+  if(x.mres&&c.mres!==x.mres)c.mres=x.mres; // resultado de mesa: A = autorizado, N = no autorizado
   if(x.des==='SI'&&!/DESEMBOLSADO/i.test(c.est)){
     sysEv(id,{t:'sis',ts:new Date().toISOString(),f:HOY,por:'Sistema',de:c.est,est:'1) DESEMBOLSADO',fuente:x.fuente},'sis:'+id+':'+norm('1) DESEMBOLSADO'));
     c.est='1) DESEMBOLSADO';r.desX++;
@@ -624,7 +636,7 @@ function enriquece(c,id,x,r){
 const idDe=v=>v==null||v===''?'':String(typeof v==='number'?Math.round(v):v).trim();
 function importNuevos(sh,r){
   const H=sh.header.map(norm),ix=k=>H.indexOf(k);
-  const iId=ix('solicitud_id'),iPre=ix('pre-approval'),iF=ix('fecha'),iEnt=ix('entro a analisis'),iDes=ix('desembolso'),iSeg=ix('segmento llenado datos'),iAse=ix('asesor'),iSuc=ix('sucursal'),iReg=ix('region');
+  const iId=ix('solicitud_id'),iPre=ix('pre-approval'),iF=ix('fecha'),iEnt=ix('entro a analisis'),iDes=ix('desembolso'),iSeg=ix('segmento llenado datos'),iAse=ix('asesor'),iSuc=ix('sucursal'),iReg=ix('region'),iMr=ix('estatus analisis');
   if(iId<0||iSeg<0)throw new Error('Archivo de Nuevos sin columnas esperadas');
   const reg={},jal={},mapa={};const mes12=new Date(Date.now()-400*864e5).toISOString().slice(0,7);
   for(const row of sh.rows){
@@ -632,7 +644,7 @@ function importNuevos(sh,r){
     const seg=String(row[iSeg]||'').trim(),ll=/^[A-E]\)/i.test(seg)?seg[0].toLowerCase():'';
     const ent=String(row[iEnt]||'').toUpperCase(),des=String(row[iDes]||'').toUpperCase();
     {const s0=String(row[iSuc]||'').trim(),r0=String(row[iReg]||'').trim().toUpperCase();if(s0&&r0)mapa[s0]=r0;}
-    const c=DB.cuentas[id];if(c){r.match++;enriquece(c,id,{ll,ent,des,fuente:'Nuevos'},r);}
+    const c=DB.cuentas[id];if(c){r.match++;enriquece(c,id,{ll,ent,des,mres:mresDe(row[iMr]),fuente:'Nuevos'},r);}
     if(String(row[iPre]||'').toUpperCase()==='APROBADO'&&ll){
       const mes=(toISODate(row[iF])||'').slice(0,7);if(!mes)continue;
       const rg=String(row[iReg]||'').trim()||'(sin región)',k='abcde'.indexOf(ll);
@@ -646,25 +658,28 @@ function importNuevos(sh,r){
 }
 function importRenov(sh,r){
   const H=sh.header.map(norm),ix=k=>H.indexOf(k);
-  const iSig=ix('siguiente solicitud'),iEnt=ix('entro a analisis'),iDes=ix('desembolso');
+  const iSig=ix('siguiente solicitud'),iEnt=ix('entro a analisis'),iDes=ix('desembolso'),iMr=ix('estatus analisis');
   if(iSig<0)throw new Error('Archivo de Renovaciones sin columna "Siguiente solicitud"');
   for(const row of sh.rows){
     if(!row)continue;const id=idDe(row[iSig]);if(!/^\d+$/.test(id))continue;r.filas++;
     const c=DB.cuentas[id];if(!c)continue;r.match++;
-    enriquece(c,id,{ent:String(row[iEnt]||'').toUpperCase(),des:String(row[iDes]||'').toUpperCase(),fuente:'Renovaciones'},r);
+    enriquece(c,id,{ent:String(row[iEnt]||'').toUpperCase(),des:String(row[iDes]||'').toUpperCase(),mres:mresDe(row[iMr]),fuente:'Renovaciones'},r);
   }
 }
 function exportaCSV(){
-  const rows=visibles();HOY=hoyISO();
-  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza'];
+  HOY=hoyISO();
+  // Se exporta exactamente lo que está en pantalla: Embudo → su rango y nivel; Pendientes (o cualquier otra pestaña) → la lista con sus filtros
+  const rows=TAB==='emb'&&EMB_LIST?EMB_LIST:(LAST_LIST||visibles());
+  if(!rows.length)return toast('No hay cuentas en lo que tienes filtrado');
+  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza','Región','Paso en el embudo','Resultado mesa (sistema)'];
   const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const lines=[cols.join(',')];
   for(const s of rows){const c=s.c;
     lines.push([c.id,c.nombre,c.suc,s.asesorAct,c.tipo,(c.seg||'').replace(/^\S+\)\s*/,''),c.fsol,s.dias,(c.est||'').replace(/^\S+\)\s*/,''),c.ll?LLEN[c.ll]:'',s.etapa||'Sin gestión',s.fprog,s.repros||'',s.lastCom,s.lastComF,
-      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:''].map(q).join(','));}
+      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':''].map(q).join(','));}
   const b=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='approvals_'+norm(vistaNombre()).replace(/\s+/g,'_')+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  toast('✔ Exportadas '+rows.length+' cuentas. Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
+  toast('✔ Exportadas '+rows.length+' cuentas (lo que tienes filtrado en pantalla). Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
 }
 
 /* ================= Archivo VERDES de la empresa: llenar "Porque no se envio a mesa ?" y "STATUS" ================= */
@@ -802,9 +817,10 @@ function fillVista(){
   $('#vista').innerHTML=o.map(([v,l])=>`<option value="${esc(v)}"${est(v)}>${esc(l)}</option>`).join('');
   $('#vista').value=VISTA;$('#vista').hidden=n==='gerente'||o.length<2;
 }
-$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.reg='';F.suc='';F.asesor='';A.reg='';A.suc='';A.ase='';fillVista();render();};
+$('#vista').onchange=e=>{VISTA=e.target.value;try{localStorage.setItem(KEYV,VISTA);}catch(_){}F.reg='';F.suc='';F.asesor='';F.emb=null;LAST_LIST=null;A.reg='';A.suc='';A.ase='';E.reg='';E.suc='';E.ase='';fillVista();render();};
 let TAB='lista';
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{TAB=b.dataset.tab;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));render();});
+function irTab(t){TAB=t;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));render();window.scrollTo(0,0);}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>irTab(b.dataset.tab));
 $('#bMenu').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('on');};
 document.addEventListener('click',()=>$('#menu').classList.remove('on'));
 $('#bImport').onclick=()=>$('#fx').click();
@@ -917,7 +933,8 @@ const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
 const FILTROS_SIMPLE_SI_HAY=['f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
-const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:''};
+const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null};
+let LAST_LIST=null; // lo que se ve en Pendientes con todos sus filtros: es lo que se exporta
 const FILTROS=[
   ['f_abiertos','Abiertos',s=>s.abierto],
   ['f_venc','Compromiso vencido',s=>s.venc],
@@ -934,7 +951,7 @@ const FILTROS=[
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
   ['f_cerr','Cerrados',s=>!s.abierto&&(ES_GP()||!s.fC||s.fC>=addDays(HOY,-30))],
 ];
-function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vApv').hidden=TAB!=='apv';$('#vConc').hidden=TAB!=='conc';TAB==='lista'?renderLista():TAB==='apv'?renderApv():renderConc();}
+function render(){HOY=hoyISO();$('#vLista').hidden=TAB!=='lista';$('#vApv').hidden=TAB!=='apv';$('#vConc').hidden=TAB!=='conc';$('#vEmb').hidden=TAB!=='emb';TAB==='lista'?renderLista():TAB==='apv'?renderApv():TAB==='emb'?renderEmb():renderConc();}
 function renderLista(){
   const all=visibles();
   if(!all.length&&!ES_GP()){$('#vLista').innerHTML=`<div class="empty"><b>Sin cuentas por ahora</b><br>Aquí aparecen los aceptados de tu sucursal en cuanto José carga el funnel.</div>`;return;}
@@ -943,14 +960,14 @@ function renderLista(){
   const k={ab:ab.length,a30:ab.filter(s=>s.dias>30).length,venc:ab.filter(s=>s.venc).length,rep:ab.filter(s=>s.repros>=2).length};
   const regsL=[...new Set(all.map(s=>REG(s.c.suc)).filter(Boolean))].sort();if(F.reg&&!regsL.includes(F.reg))F.reg='';
   const sucs=[...new Set(all.filter(s=>!F.reg||REG(s.c.suc)===F.reg).map(s=>s.c.suc))].sort();if(F.suc&&!sucs.includes(F.suc))F.suc='';
-  const base=all.filter(s=>(!F.reg||REG(s.c.suc)===F.reg)&&(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg));
+  const base=all.filter(s=>(!F.reg||REG(s.c.suc)===F.reg)&&(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg)&&(!F.emb||enRango(s,F.emb)));
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
   const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
-  const fn=FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
+  const fn=F.emb?(s=>embDe(s)===F.emb.k):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
-  const shown=list.slice(0,300);
+  LAST_LIST=list;const shown=list.slice(0,300);
   const corto=n=>{const t=String(n||'').trim().split(/\s+/);if(t.length<2)return tc(t[0]||'');return tc(t[0])+' '+tc(t.length>=4?t[2]:t[1]);};
   const pend=a=>a.filter(s=>s.abierto&&(s.venc||s.hoyC||s.sinGestion)).length;
   const verChips=!MULTI()||!!F.suc;
@@ -958,7 +975,7 @@ function renderLista(){
     return `<button class="fchip ase ${F.asesor===a?'on':''}" data-a="${esc(a)}" title="${esc(a||'Todos')}">${a?esc(corto(a)):'Todos'} ${n?`<span class="pend">${n}</span>`:''}</button>`;}).join('')}</div><p class="note" style="margin:2px 0 6px"><span class="pend" style="display:inline-block;min-width:16px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;padding:0 5px;text-align:center">n</span> = cuentas por atender hoy: compromiso vencido, compromiso de hoy o sin gestión. Al tocar un asesor ves <b>todas</b> sus cuentas abiertas, con esas primero.</p>`:'';
   const SECC=[['⚠ Compromisos vencidos — ¿qué pasó?',s=>s.venc],['📅 Compromisos de hoy',s=>s.hoyC],['Sin gestión — ¿qué sigue y cuándo?',s=>s.sinGestion],['Próximos compromisos',s=>s.fprog&&s.fprog>HOY],['Abiertas sin fecha',()=>true]];
   let cuerpo;
-  if(F.q==='f_abiertos'){const usado=new Set();cuerpo=SECC.map(([t,f])=>{const g=shown.filter(s=>!usado.has(s.c.id)&&f(s));g.forEach(s=>usado.add(s.c.id));
+  if(F.q==='f_abiertos'&&!F.emb){const usado=new Set();cuerpo=SECC.map(([t,f])=>{const g=shown.filter(s=>!usado.has(s.c.id)&&f(s));g.forEach(s=>usado.add(s.c.id));
       if(f===SECC[2][1]||t.startsWith('Próximos'))g.sort((a,b)=>(a.fprog||'').localeCompare(b.fprog||'')||(b.dias-a.dias));
       return g.length?`<h4 class="secc">${t} <small>(${g.length})</small></h4>`+g.map(card).join(''):'';}).join('');}
   else cuerpo=shown.map(card).join('');
@@ -975,7 +992,8 @@ function renderLista(){
     <div class="kpi ${k.rep?'warn':''}" data-q="f_rep"><b>${k.rep}</b><span>↻ 2+ veces</span></div>
   </div>`}
   <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
-  <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
+  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}</b><br><small style="color:var(--mut)">Aceptados con solicitud ${esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
+  <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]&&!F.emb?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${regsL.length>1?`<select id="fReg"><option value="">Todas las regiones</option>${regsL.map(x=>`<option value="${esc(x)}" ${F.reg===x?'selected':''}>${esc(tit(x))}</option>`).join('')}</select>`:''}
     ${MULTI()?`<select id="fSuc"><option value="">Todas las sucursales</option>${sucs.map(x=>`<option ${F.suc===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
@@ -984,10 +1002,13 @@ function renderLista(){
     <input id="fTxt" placeholder="Buscar nombre o ID" value="${esc(F.txt)}">
   </div>
   ${chipsAse}
-  <div class="count">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>300?' · mostrando 300':''}</div>
+  <div class="count" style="display:flex;align-items:center;gap:8px"><span style="flex:1">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>300?' · mostrando 300':''}</span>${list.length?`<button class="btn sec" id="lCsv" style="padding:3px 10px;font-size:12px">📤 Exportar estas ${list.length}</button>`:''}</div>
   ${cuerpo||'<div class="empty">Nada en este filtro 👍</div>'}`;
   document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{F.asesor=b.dataset.a;renderLista();});
-  document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.q=b.dataset.q;renderLista();});
+  document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.q=b.dataset.q;F.emb=null;renderLista();});
+  if($('#embX'))$('#embX').onclick=()=>{F.emb=null;F.q='f_abiertos';F.reg='';F.suc='';F.asesor='';renderLista();};
+  if($('#embBack'))$('#embBack').onclick=()=>irTab('emb');
+  if($('#lCsv'))$('#lCsv').onclick=exportaCSV;
   const on=(sel,k)=>{const el=$(sel);if(el)el.onchange=e=>{F[k]=e.target.value;renderLista();};};
   on('#fReg','reg');on('#fSuc','suc');on('#fAse','asesor');on('#fSeg','seg');
   const t=$('#fTxt');t.oninput=e=>{F.txt=e.target.value;clearTimeout(t._d);t._d=setTimeout(()=>{renderLista();const n=$('#fTxt');n.focus();n.setSelectionRange(n.value.length,n.value.length);},350);};
@@ -1348,6 +1369,93 @@ function renderApv(){
   el.querySelectorAll('[data-reg]').forEach(tr=>tr.onclick=()=>{A.reg=tr.dataset.reg;A.suc='';A.ase='';renderApv();});
   el.querySelectorAll('[data-suc]').forEach(tr=>tr.onclick=()=>{A.suc=tr.dataset.suc;A.ase='';renderApv();});
   el.querySelectorAll('[data-ase]').forEach(tr=>tr.onclick=()=>{A.ase=tr.dataset.ase;renderApv();window.scrollTo(0,0);});
+}
+/* ================= Embudo: ¿en qué paso va cada aceptado? (cada cuenta cae en un solo paso; suman el total) ================= */
+const EMB=[
+  ['sing','Sin gestión','el gerente aún no captura nada','#94a3b8'],
+  ['seg','En seguimiento','visita, validación o reagendado · gerente','#7dd3c8'],
+  ['subir','Por subir a mesa','según gerente','#2dd4bf'],
+  ['mesa','En mesa','sistema + gerente','#14b8a6'],
+  ['aut','Autorizado, por desembolsar','mesa autorizó (sistema) + gerente','#0d9488'],
+  ['des','Desembolsado','sistema','#15803d'],
+  ['rech','Rechazado','gerente con motivo · mesa (sistema)','#b91c1c'],
+];
+const embNom=k=>(EMB.find(x=>x[0]===k)||[,k])[1];
+function embDe(s){
+  if(s.cierre==='des'||s.cierre==='desPC')return 'des';
+  if(s.cierre==='rech'||s.c.mres==='N')return 'rech';
+  if(s.c.mres==='A'||s.etapa==='Por desembolsar')return 'aut';
+  if(s.sisMesa||s.etapa==='En mesa')return 'mesa';
+  if(s.etapa==='Se sube a mesa')return 'subir';
+  if(s.sinGestion)return 'sing';
+  return 'seg';
+}
+const E={reg:'',suc:'',ase:'',per:'mes',desde:'',hasta:''};
+let EMB_LIST=null;
+const PER=[['sem','Esta semana'],['semp','Semana pasada'],['mes','Este mes'],['mesp','Mes pasado'],['todo','Todo'],['pers','Personalizado']];
+function rangoDe(per){
+  const lun=addDays(HOY,-((new Date(HOY+'T12:00:00').getDay()+6)%7)),m1=HOY.slice(0,8)+'01',mp=addDays(m1,-1);
+  return per==='sem'?{desde:lun,hasta:HOY}:per==='semp'?{desde:addDays(lun,-7),hasta:addDays(lun,-1)}:per==='mes'?{desde:m1,hasta:HOY}
+    :per==='mesp'?{desde:mp.slice(0,8)+'01',hasta:mp}:per==='todo'?{desde:'',hasta:''}:{desde:E.desde,hasta:E.hasta};
+}
+const enRango=(s,r)=>{const f=s.c.fsol||'';if(!r.desde&&!r.hasta)return true;return !!f&&(!r.desde||f>=r.desde)&&(!r.hasta||f<=r.hasta);};
+const rangoTxt=r=>!r.desde&&!r.hasta?'desde el inicio del seguimiento':r.desde&&r.hasta?'del '+fmt(r.desde,false)+' al '+fmt(r.hasta,false):r.desde?'desde el '+fmt(r.desde,false):'hasta el '+fmt(r.hasta,false);
+function irPend(k,sc){const r=rangoDe(E.per);F.emb={k,desde:r.desde,hasta:r.hasta};F.reg=sc.reg||'';F.suc=sc.suc||'';F.asesor=sc.ase||'';F.q='f_abiertos';F.txt='';F.seg='';irTab('lista');}
+function renderEmb(){
+  const el=$('#vEmb'),all0=visibles();
+  if(!all0.length){el.innerHTML='<div class="empty">Aún no hay cuentas. Aparecen en cuanto se carga el funnel.</div>';return;}
+  if(!MULTI()){E.reg='';E.suc='';}
+  const r=rangoDe(E.per);if(E.per!=='pers'){E.desde=r.desde;E.hasta=r.hasta;}
+  const baseReg=VISTA.startsWith('R:')?VISTA.slice(2):'',Rg=E.reg||baseReg;
+  const scope=all0.filter(s=>enRango(s,r)&&(!E.reg||REG(s.c.suc)===E.reg)&&(!E.suc||s.c.suc===E.suc)&&(!E.ase||s.asesorAct===E.ase));
+  EMB_LIST=scope;
+  const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
+  const T=cnt(scope),N=scope.length,max=Math.max(1,...EMB.map(x=>T[x[0]]));
+  const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
+  const sc0={reg:E.reg,suc:E.suc,ase:E.ase};
+  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small></div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
+  // tabla un nivel abajo
+  let gk=null,gName,gAttr,gT='';
+  if(E.ase){gk=null;}
+  else if(E.suc||!MULTI()){gk=s=>s.asesorAct||'(sin asesor)';gName=k=>corto(k);gAttr='ase';gT='Por asesor';}
+  else if(Rg){gk=s=>s.c.suc;gName=k=>tit(k.replace('CI-',''));gAttr='suc';gT='Por oficina';}
+  else{gk=s=>REG(s.c.suc)||'(sin región)';gName=k=>tit(k);gAttr='reg';gT='Por región';}
+  const scOf=k=>gAttr==='ase'?{...sc0,ase:k}:gAttr==='suc'?{reg:E.reg,suc:k}:{reg:k};
+  let tabla='';
+  if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});
+    const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
+    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td></tr>`;};
+    tabla=`<div class="panel"><h3>${gT}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th></tr>
+      ${ks.map(k=>tr(gName(k),k,g[k])).join('')}${ks.length>1?tr('Total',null,scope,true):''}</table></div>
+      <p class="note">Toca un nombre para bajar de nivel, o un número para ver esas cuentas.</p></div>`;}
+  const nivel=E.ase?esc(corto(E.ase)):E.suc?esc(tit(E.suc.replace('CI-',''))):!MULTI()?esc(vistaNombre()):Rg?'Región '+esc(tit(Rg)):'Subdirección';
+  const atras=E.ase?(E.suc?tit(E.suc.replace('CI-','')):vistaNombre()):E.suc?(Rg?'Región '+tit(Rg):'Subdirección'):(E.reg&&VISTA==='GP')?'Subdirección':'';
+  el.innerHTML=`<div class="panel">
+    <div class="frow" style="flex-wrap:wrap"><select id="ePer">${PER.map(([v,l])=>`<option value="${v}" ${E.per===v?'selected':''}>${l}</option>`).join('')}</select>
+      <label style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:4px">de <input type="date" id="eDe" value="${E.desde}" style="width:auto"></label>
+      <label style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:4px">a <input type="date" id="eHa" value="${E.hasta}" style="width:auto"></label></div>
+    <p class="note" style="margin:2px 0 8px">Aceptados con <b>fecha de solicitud</b> ${esc(rangoTxt(r))}, y en qué paso va cada uno hoy.</p>
+    ${atras?`<button class="btn" id="eBack" style="margin-bottom:8px">← ${esc(atras)}</button>`:''}
+    <h3 style="margin-bottom:6px">${nivel}</h3>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi"><b>${N}</b><span>Aceptados</span></div>
+      <div class="kpi"><b>${ab}</b><span>Siguen abiertos</span></div>
+      <div class="kpi"><b style="color:var(--ok)">${pct(T.des,N)}</b><span>Conversión</span></div>
+    </div>
+    <h4 class="secc">Abiertos <small>(${ab})</small></h4>
+    ${EMB.slice(0,5).map(fila).join('')}
+    <h4 class="secc">Cerrados <small>(${T.des+T.rech})</small></h4>
+    ${EMB.slice(5).map(fila).join('')}
+    <p class="note">Toca un paso para ver esas cuentas (y exportarlas). Cada cuenta está en un solo paso; si el <b>sistema</b> dice otra cosa que el gerente, manda el sistema.${T.sing?` <b style="color:var(--warn)">${T.sing} sin gestión</b>: mientras el gerente no capture, no se sabe en qué van.`:''}${mesaSinMot?` <b style="color:var(--bad)">${mesaSinMot}</b> de los rechazados los rechazó mesa y el gerente aún no captura el motivo.`:''}</p>
+    ${N?`<div class="row" style="justify-content:flex-end"><button class="btn sec" id="eCsv" style="padding:4px 10px;font-size:12px">📤 Exportar estas ${N}</button></div>`:''}
+  </div>${tabla}`;
+  $('#ePer').onchange=e=>{E.per=e.target.value;if(E.per==='pers'&&!E.desde){E.desde=HOY.slice(0,8)+'01';E.hasta=HOY;}renderEmb();};
+  const fch=(id,k)=>{$(id).onchange=e=>{E.per='pers';E[k]=e.target.value;renderEmb();};};fch('#eDe','desde');fch('#eHa','hasta');
+  if($('#eBack'))$('#eBack').onclick=()=>{if(E.ase)E.ase='';else if(E.suc)E.suc='';else E.reg='';renderEmb();};
+  if($('#eCsv'))$('#eCsv').onclick=exportaCSV;
+  el.querySelectorAll('.erow[data-k]').forEach(d=>d.onclick=()=>{if(T[d.dataset.k])irPend(d.dataset.k,sc0);});
+  el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
+  el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOf(td.dataset.gk):sc0));
 }
 const ALZA_TASA='2026-10-16'; // fecha del alza de tasas, para comparar antes / después
 function tasaHTML(all){const r=all.filter(s=>s.cierre==='rech'&&/^Tasa/.test(s.rech.motivo||''));
