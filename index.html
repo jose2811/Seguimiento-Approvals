@@ -154,7 +154,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.6</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.7</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1461,7 +1461,7 @@ function renderEmb(){
   const nivel=E.ase?esc(corto(E.ase)):E.suc?esc(tit(E.suc.replace('CI-',''))):!MULTI()?esc(vistaNombre()):Rg?'Región '+esc(tit(Rg)):'Subdirección';
   const atras=E.ase?(E.suc?tit(E.suc.replace('CI-','')):vistaNombre()):E.suc?(Rg?'Región '+tit(Rg):'Subdirección'):(E.reg&&VISTA==='GP')?'Subdirección':'';
   el.innerHTML=`<div class="panel">
-    <div class="frow" style="flex-wrap:wrap"><select id="ePer">${PER.map(([v,l])=>`<option value="${v}" ${E.per===v?'selected':''}>${l}</option>`).join('')}</select>
+    <div class="frow" style="flex-wrap:wrap"><select id="ePer">${PER.map(([v,l])=>`<option value="${v}" ${E.per===v?'selected':''}>${l}${v==='sem'||v==='semp'?' · Sem '+(+semDe(rangoDe(v).desde).split('-')[1])+' ('+fmt(rangoDe(v).desde,false)+' – '+(v==='sem'?'hoy':fmt(rangoDe(v).hasta,false))+')':''}</option>`).join('')}</select>
       <label style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:4px">de <input type="date" id="eDe" value="${E.desde}" style="width:auto"></label>
       <label style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:4px">a <input type="date" id="eHa" value="${E.hasta}" style="width:auto"></label></div>
     <p class="note" style="margin:2px 0 8px">Aceptados con <b>fecha de solicitud</b> ${esc(rangoTxt(r))}, y en qué paso va cada uno hoy.</p>
