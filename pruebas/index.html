@@ -156,7 +156,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.7</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -212,6 +212,14 @@ const ETAPAS={
   'Reagendado':{fecha:'opt',comReq:true}
 };
 const ETAPA_MESA=['En mesa','Por desembolsar'];
+/* Monto estimado (lo captura el gerente; ningún archivo del sistema lo trae): solo cuenta para lo que está en proceso */
+const MONTO_ETAPAS=['Se sube a mesa','En mesa','Por desembolsar'],MONTO_MIN=3000,MONTO_MAX=150000,MONTO_GP=70000;
+const pideMonto=s=>s.abierto&&['subir','mesa','aut'].includes(embDe(s)),sinMonto=s=>pideMonto(s)&&!s.monto;
+const leeMonto=v=>{const n=+String(v||'').replace(/[^\d.]/g,'');return isFinite(n)?Math.round(n):0;};
+function confirmaMonto(m){if(!m||m<=0)return 'Pon el monto a desembolsar';
+  let t='¿El monto es '+money(m)+'?';if(m<MONTO_MIN||m>MONTO_MAX)t='⚠ '+money(m)+' se ve fuera de lo normal ('+money(MONTO_MIN)+' a '+money(MONTO_MAX)+').\n¿Seguro que el monto es '+money(m)+'?';
+  if(m>MONTO_GP)t+='\n\nArriba de '+money(MONTO_GP)+' requiere validación del GP.';return confirm(t)?'':'cancel';}
+const mk=n=>!n?'—':n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+Math.round(n/1e3)+'k':money(n);
 const MESA_DIAS=10; // en mesa más de esto = preguntar qué pasó
 const VER_DIAS_MESA=false; // oculto mientras se juntan fechas reales de entrada a mesa (desde 27 oct 2026); el registro sigue corriendo. Prender a mediados de nov.
 /* nombres del control en Excel -> etapas de la app */
@@ -680,12 +688,12 @@ function exportaCSV(){
   // Se exporta exactamente lo que está en pantalla: Embudo → su rango y nivel; Pendientes (o cualquier otra pestaña) → la lista con sus filtros
   const rows=TAB==='emb'&&EMB_LIST?EMB_LIST:(LAST_LIST||visibles());
   if(!rows.length)return toast('No hay cuentas en lo que tienes filtrado');
-  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza','Región','Paso en el embudo','Resultado mesa (sistema)','Días en mesa'];
+  const cols=['SolicitudID','Cliente','Sucursal','Asesor','Tipo','Segmento','Fecha solicitud','Días','Estatus sistema','Llenado (sistema)','Etapa gerente','Fecha compromiso','Reprogramaciones','Último comentario','Fecha último comentario','Cierre','Motivo rechazo','Quién rechaza','Región','Paso en el embudo','Resultado mesa (sistema)','Días en mesa','Monto estimado (gerente)'];
   const q=v=>{v=v==null?'':String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const lines=[cols.join(',')];
   for(const s of rows){const c=s.c;
     lines.push([c.id,c.nombre,c.suc,s.asesorAct,c.tipo,(c.seg||'').replace(/^\S+\)\s*/,''),c.fsol,s.dias,(c.est||'').replace(/^\S+\)\s*/,''),c.ll?LLEN[c.ll]:'',s.etapa||'Sin gestión',s.fprog,s.repros||'',s.lastCom,s.lastComF,
-      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':'',embDe(s)==='mesa'&&VER_DIAS_MESA?s.diasMesa+(s.mesaAprox?' (desde solicitud)':''):''].map(q).join(','));}
+      s.cierre==='des'?'Desembolsado':s.cierre==='desPC'?'Desembolsado (por confirmar)':s.cierre==='rech'?'Rechazado':'Abierto',s.rech?s.rech.motivo:'',s.rech?s.rech.cat:'',tit(REG(c.suc)),embNom(embDe(s)),c.mres==='A'?'Autorizado':c.mres==='N'?'No autorizado':'',embDe(s)==='mesa'&&VER_DIAS_MESA?s.diasMesa+(s.mesaAprox?' (desde solicitud)':''):'',pideMonto(s)&&s.monto?s.monto:''].map(q).join(','));}
   const b=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='approvals_'+norm(vistaNombre()).replace(/\s+/g,'_')+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   toast('✔ Exportadas '+rows.length+' cuentas (lo que tienes filtrado en pantalla). Ábrelo en Excel; la llave para BUSCARX es SolicitudID.');
@@ -947,7 +955,7 @@ $('#bSync').onclick=()=>sincroniza(false);
 /* ================= Lista ================= */
 const SIMPLE=()=>NIVEL()==='gerente';
 const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
-const FILTROS_SIMPLE_SI_HAY=['f_desac','f_mesa10','f_sinmot']; // solo aparece mientras haya algo que limpiar
+const FILTROS_SIMPLE_SI_HAY=['f_sinmonto','f_desac','f_mesa10','f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
 const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null,ord:'',lim:300,_k:''};
@@ -964,6 +972,7 @@ const FILTROS=[
   ['f_noini','Sistema: no inició',s=>s.abierto&&s.c.ll==='a'],
   ['f_incum','✖ Con incumplidos',s=>s.abierto&&s.incum>0],
   ['f_mesa10','🕒 En mesa +'+MESA_DIAS+' días',s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS],
+  ['f_sinmonto','💲 Sin monto',s=>sinMonto(s)],
   ['f_sinmot','Rechazados sin motivo',s=>s.cierre==='rech'&&s.rech.cat===CAT_SC],
   ['f_reas','↔ Reasignadas',s=>s.reasigs>0],
   ['f_conf','⚠ Rechazado vs sistema',s=>s.conflicto],
@@ -988,7 +997,7 @@ function renderLista(){
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
   const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
-  const fn=F.emb?(s=>embDe(s)===F.emb.k&&(!F.emb.desac||s.desac)):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
+  const fn=F.emb?(s=>embDe(s)===F.emb.k&&(!F.emb.desac||s.desac)&&(!F.emb.sinm||!s.monto)):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
   // Se muestran de 300 en 300 para que no se trabe el celular; con "Ver más" se llega a todas. El orden y el exportar siempre cubren la lista completa.
@@ -1020,7 +1029,7 @@ function renderLista(){
     <div class="kpi ${k.rep?'warn':''}" data-q="f_rep"><b>${k.rep}</b><span>↻ 2+ veces</span></div>
   </div>`}
   <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
-  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}${F.emb.desac?' · ⚠ solo según gerente':''}</b><br><small style="color:var(--mut)">Aceptados con solicitud ${esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
+  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}${F.emb.desac?' · ⚠ solo según gerente':''}${F.emb.sinm?' · 💲 sin monto':''}</b><br><small style="color:var(--mut)">Aceptados con solicitud ${esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
   <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]&&!F.emb?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${regsL.length>1?`<select id="fReg"><option value="">Todas las regiones</option>${regsL.map(x=>`<option value="${esc(x)}" ${F.reg===x?'selected':''}>${esc(tit(x))}</option>`).join('')}</select>`:''}
@@ -1058,6 +1067,7 @@ function estadoPills(s,full){
   else if(s.cierre==='rech')h+=`<span class="pill rech">✖ ${esc(s.rech.motivo)}</span>`;
   else if(s.sinGestion)h+=`<span class="pill et0">Sin gestión</span>`;
   else h+=`<span class="pill et">${esc(s.etapa)}${s.falta?' · '+esc(s.falta):''}</span>`;
+  if(pideMonto(s))h+=s.monto?`<span class="pill fok" title="Monto estimado (según gerente)">💲 ${money(s.monto)}</span>`:`<span class="pill flag" title="Falta capturar el monto a desembolsar">💲 sin monto</span>`;
   if(s.fprog&&s.abierto)h+=`<span class="pill ${s.venc?'venc':'fok'}">${s.venc?'⚠ vencido ':s.hoyC?'hoy ':''}${fmt(s.fprog)}</span>`;
   if(!full){ // modo sencillo: una sola alerta, la más importante
     if(s.desac)h+=`<span class="pill rech">⚠ No cuadra con sistema</span>`;
@@ -1132,6 +1142,7 @@ function evTxt(e){
     case 'reasig':return ['↔ Reasigna: '+e.de+' → '+e.a+' · '+e.motivo,'r'];
     case 'rech':return ['✖ Rechazado · '+e.cat+': '+e.motivo,'x'];
     case 'reac':return ['↺ Reactivada → '+e.etapa+(e.fprog?' '+fmt(e.fprog):'')+(e.antes?' · estaba rechazada: '+e.antes:''),'g'];
+    case 'monto':return ['💲 Monto estimado: '+money(e.monto),'g'];
     case 'des':return ['✔ Desembolsado'+(e.monto?' · '+money(e.monto):''),'ok'];
   }return [e.t,''];
 }
@@ -1155,13 +1166,14 @@ function openDetalle(id){
     <div><span>Estatus en sistema</span>${esc(c.est.replace(/^\S+\)\s*/,''))}</div>
     <div><span>Llegó a mesa</span>${s.mesa?'Sí <small style="color:var(--mut)">('+s.mesaFuente+')</small>':'No'}</div>
     ${c.ll?`<div><span>Llenado (sistema)</span>${LLEN[c.ll]}</div>`:''}
-    ${s.monto?`<div><span>Monto aprobado</span>${money(s.monto)}</div>`:''}
+    ${s.monto?`<div><span>Monto estimado (gerente)</span>${money(s.monto)}</div>`:''}
     ${c.safi?`<div><span>SafiCreditoID</span>${esc(c.safi)}</div>`:''}
   </div>
   ${s.abierto?`<div class="acts">
     <button class="btn" data-f="etapa">➡ Siguiente paso</button>
     ${s.fprog?`<button class="btn" style="background:#b45309" data-f="repro">↻ Reprogramar</button>`:''}
     <button class="btn sec" data-f="com">💬 Comentario</button>
+    ${pideMonto(s)?`<button class="btn sec" data-f="monto"${s.monto?'':' style="background:#fef3c7;color:#92400e"'}>💲 ${s.monto?'Corregir monto':'Poner monto'}</button>`:''}
     <button class="btn sec" data-f="reas">↔ Reasignar</button>
     <button class="btn green" data-f="des">✔ Desembolsado</button>
     <button class="btn red" data-f="rech">✖ Rechazar</button>
@@ -1170,6 +1182,7 @@ function openDetalle(id){
   <div class="form" id="f-etapa">
     <label>Siguiente paso</label><select id="e_etapa">${etOpts}</select>
     <div id="e_fechaW"><label id="e_fechaL">Fecha compromiso</label><input type="date" id="e_fecha" min="${HOY}" value="${addDays(HOY,1)}"></div>
+    <div id="e_montoW" hidden><label id="e_montoL">Monto a desembolsar (obligatorio)</label><input type="text" inputmode="numeric" id="e_monto" placeholder="Ej. 30000" value="${s.monto||''}"><div class="note" id="e_montoN"></div></div>
     <label id="e_comL">Comentario (opcional)</label><textarea id="e_com"></textarea>
     <div class="err" id="e_err"></div>
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="e_ok">Guardar</button></div>
@@ -1186,6 +1199,13 @@ function openDetalle(id){
     <label>Comentario</label><textarea id="c_com" placeholder="Qué pasó con la cuenta"></textarea>
     <div class="err" id="c_err"></div>
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="c_ok">Guardar</button></div>
+  </div>
+  <div class="form" id="f-monto">
+    <label>Monto a desembolsar (estimado)</label><input type="text" inputmode="numeric" id="m_monto" placeholder="Ej. 30000" value="${s.monto||''}">
+    <div class="note">Lo que se espera desembolsar. Si mesa autorizó menos, pon lo autorizado. Es un dato del gerente: ningún archivo del sistema trae el monto.</div>
+    <label>Comentario (opcional)</label><textarea id="m_com"></textarea>
+    <div class="err" id="m_err"></div>
+    <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="m_ok">Guardar monto</button></div>
   </div>
   <div class="form" id="f-reas">
     <div class="note">Asesor actual: <b>${esc(s.asesorAct)}</b>. El contador de días con asesor se reinicia; el total desde la solicitud no.</div>
@@ -1226,7 +1246,10 @@ function openDetalle(id){
   sh.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{sh.querySelectorAll('.form').forEach(f=>f.classList.toggle('on',f.id==='f-'+b.dataset.f));$('#f-'+b.dataset.f).scrollIntoView({behavior:'smooth',block:'nearest'});});
   sh.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>b.closest('.form').classList.remove('on'));
   // etapa
-  const syncEt=()=>{const cfg=ETAPAS[$('#e_etapa').value];$('#e_fechaW').hidden=cfg.fecha==='no';$('#e_fechaL').textContent=cfg.fecha==='req'?'Fecha compromiso':'Fecha compromiso (opcional)';$('#e_comL').textContent=cfg.comReq?'¿Qué pasó? (obligatorio)':'Comentario (opcional)';};
+  const syncEt=()=>{const et=$('#e_etapa').value,pm=MONTO_ETAPAS.includes(et);$('#e_montoW').hidden=!pm;
+    $('#e_montoL').textContent=et==='Por desembolsar'?'Monto que autorizó mesa (obligatorio)':'Monto a desembolsar (obligatorio)';
+    $('#e_montoN').textContent=et==='Por desembolsar'&&s.monto?'Tenía '+money(s.monto)+'. Si mesa autorizó menos, corrígelo.':'Estimado: es lo que verá dirección como monto en proceso.';
+    const cfg=ETAPAS[et];$('#e_fechaW').hidden=cfg.fecha==='no';$('#e_fechaL').textContent=cfg.fecha==='req'?'Fecha compromiso':'Fecha compromiso (opcional)';$('#e_comL').textContent=cfg.comReq?'¿Qué pasó? (obligatorio)':'Comentario (opcional)';};
   $('#e_etapa').onchange=syncEt;syncEt();
   $('#e_ok').onclick=()=>{
     const etapa=$('#e_etapa').value,cfg=ETAPAS[etapa],fecha=cfg.fecha==='no'?'':$('#e_fecha').value,com=$('#e_com').value.trim();
@@ -1234,7 +1257,8 @@ function openDetalle(id){
     if(cfg.comReq&&!com)return $('#e_err').textContent='Explica qué pasó';
     if(fecha&&fecha<HOY)return $('#e_err').textContent='La fecha no puede ser pasada';
     if(etapa===s.etapa&&fecha&&s.fprog&&fecha!==s.fprog)return $('#e_err').textContent='Es la misma etapa con otra fecha: usa ↻ Reprogramar';
-    const e={t:'etapa',etapa,fprog:fecha};if(com)e.com=com;
+    let monto=0;if(MONTO_ETAPAS.includes(etapa)){monto=leeMonto($('#e_monto').value);const r=confirmaMonto(monto);if(r==='cancel')return;if(r)return $('#e_err').textContent=r;}
+    const e={t:'etapa',etapa,fprog:fecha};if(com)e.com=com;if(monto)e.monto=monto;
     addEv(id,e);done('Guardado');
   };
   // repro
@@ -1261,6 +1285,9 @@ function openDetalle(id){
       const e={t:'reasig',de:s.asesorAct,a,motivo:m};if(com)e.com=com;addEv(id,e);done('↔ Reasignada a '+a);
     };
   }
+  // monto
+  $('#m_ok')&&($('#m_ok').onclick=()=>{const m=leeMonto($('#m_monto').value),com=$('#m_com').value.trim();const r=confirmaMonto(m);if(r==='cancel')return;if(r)return $('#m_err').textContent=r;
+    if(m===s.monto&&!com)return $('#m_err').textContent='Es el mismo monto que ya tenía';const e={t:'monto',monto:m};if(com)e.com=com;addEv(id,e);done('💲 Monto guardado: '+money(m));});
   // comentario
   $('#c_ok').onclick=()=>{const com=$('#c_com').value.trim();if(!com)return $('#c_err').textContent='Escribe el comentario';addEv(id,{t:'com',com});done('Comentario guardado');};
   // desembolso
@@ -1449,9 +1476,11 @@ function renderEmb(){
   EMB_LIST=scope;
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const T=cnt(scope),N=scope.length,max=Math.max(1,...EMB.map(x=>T[x[0]]));
-  const desacK=k=>scope.filter(s=>embDe(s)===k&&s.desac).length;const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
+  const desacK=k=>scope.filter(s=>embDe(s)===k&&s.desac).length;
+  const MT={},SM={};['subir','mesa','aut'].forEach(k=>{const a=scope.filter(s=>embDe(s)===k&&s.abierto);MT[k]=a.reduce((t,s)=>t+(s.monto||0),0);SM[k]=a.filter(s=>!s.monto).length;});
+  const mtTot=MT.subir+MT.mesa+MT.aut;const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
   const sc0={reg:E.reg,suc:E.suc,ase:E.ase};
-  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${(x[0]==='mesa'||x[0]==='aut')&&desacK(x[0])?`<small class="dsc" data-dk="${x[0]}" style="display:block;color:var(--bad);font-weight:700">⚠ ${desacK(x[0])} solo según gerente: el sistema no lo confirma ›</small>`:''}${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
+  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0] in MT&&n?`<small style="display:block;color:var(--ink);font-weight:700">💲 ${money(MT[x[0]])} estimado${SM[x[0]]?` · <span class="smo" data-sk="${x[0]}" style="color:var(--warn);text-decoration:underline dotted">${SM[x[0]]} sin monto ›</span>`:''}</small>`:''}${(x[0]==='mesa'||x[0]==='aut')&&desacK(x[0])?`<small class="dsc" data-dk="${x[0]}" style="display:block;color:var(--bad);font-weight:700">⚠ ${desacK(x[0])} solo según gerente: el sistema no lo confirma ›</small>`:''}${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
   // tabla un nivel abajo
   let gk=null,gName,gAttr,gT='';
   if(E.ase){gk=null;}
@@ -1462,8 +1491,8 @@ function renderEmb(){
   let tabla='';
   if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});
     const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
-    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td></tr>`;};
-    tabla=`<div class="panel"><h3>${gT}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th></tr>
+    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td>${['subir','mesa','aut'].map(k=>`<td>${mk(arr.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0))}</td>`).join('')}</tr>`;};
+    tabla=`<div class="panel"><h3>${gT}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th>$ Por subir</th><th>$ En mesa</th><th>$ Autoriz.</th></tr>
       ${ks.map(k=>tr(gName(k),k,g[k])).join('')}${ks.length>1?tr('Total',null,scope,true):''}</table></div>
       <p class="note">Toca un nombre para bajar de nivel, o un número para ver esas cuentas.</p></div>`;}
   const nivel=E.ase?esc(corto(E.ase)):E.suc?esc(tit(E.suc.replace('CI-',''))):!MULTI()?esc(vistaNombre()):Rg?'Región '+esc(tit(Rg)):'Subdirección';
@@ -1480,6 +1509,12 @@ function renderEmb(){
       <div class="kpi"><b>${ab}</b><span>Siguen abiertos</span></div>
       <div class="kpi"><b style="color:var(--ok)">${pct(T.des,N)}</b><span>Conversión</span></div>
     </div>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-top:6px">
+      <div class="kpi"><b>${mk(MT.subir)}</b><span>Por subir a mesa · ${T.subir}</span></div>
+      <div class="kpi"><b>${mk(MT.mesa)}</b><span>En mesa · ${T.mesa}</span></div>
+      <div class="kpi"><b style="color:var(--ok)">${mk(MT.aut)}</b><span>Autorizado · ${T.aut}</span></div>
+    </div>
+    <p class="note" style="margin:4px 2px 0">💲 Montos <b>estimados según gerente</b> (ningún archivo del sistema trae el monto). En proceso: <b>${money(mtTot)}</b>${SM.subir+SM.mesa+SM.aut?` · <b style="color:var(--warn)">${SM.subir+SM.mesa+SM.aut} cuentas sin monto</b>`:''}.</p>
     <h4 class="secc">Abiertos <small>(${ab})</small></h4>
     ${EMB.slice(0,5).map(fila).join('')}
     <h4 class="secc">Cerrados <small>(${T.des+T.rech})</small></h4>
@@ -1492,6 +1527,7 @@ function renderEmb(){
   if($('#eBack'))$('#eBack').onclick=()=>{if(E.ase)E.ase='';else if(E.suc)E.suc='';else E.reg='';renderEmb();};
   if($('#eCsv'))$('#eCsv').onclick=exportaCSV;
   el.querySelectorAll('.erow[data-k]').forEach(d=>d.onclick=()=>{if(T[d.dataset.k])irPend(d.dataset.k,sc0);});
+  el.querySelectorAll('.smo').forEach(d=>d.onclick=ev=>{ev.stopPropagation();irPend(d.dataset.sk,sc0);F.emb.sinm=true;renderLista();});
   el.querySelectorAll('.dsc').forEach(d=>d.onclick=ev=>{ev.stopPropagation();irPend(d.dataset.dk,sc0);F.emb.desac=true;renderLista();});
   const m10=el.querySelector('.m10');if(m10)m10.onclick=ev=>{ev.stopPropagation();F.emb=null;F.reg=sc0.reg||'';F.suc=sc0.suc||'';F.asesor=sc0.ase||'';F.txt='';F.seg='';F.q='f_mesa10';irTab('lista');};
   el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
