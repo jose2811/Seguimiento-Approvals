@@ -156,7 +156,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.0</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.1</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1201,8 +1201,8 @@ function openDetalle(id){
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="c_ok">Guardar</button></div>
   </div>
   <div class="form" id="f-monto">
-    <label>Monto a desembolsar (estimado)</label><input type="text" inputmode="numeric" id="m_monto" placeholder="Ej. 30000" value="${s.monto||''}">
-    <div class="note">Lo que se espera desembolsar. Si mesa autorizó menos, pon lo autorizado. Es un dato del gerente: ningún archivo del sistema trae el monto.</div>
+    <label>${pideMonto(s)&&embDe(s)==='aut'?'Monto que autorizó mesa':'Monto solicitado: el que se mandó a mesa'}</label><input type="text" inputmode="numeric" id="m_monto" placeholder="Ej. 30000" value="${s.monto||''}">
+    <div class="note">${pideMonto(s)&&embDe(s)==='aut'?'Si mesa autorizó un monto distinto al que se mandó, pon el autorizado.':'Lo que pidió el cliente y se mandó a mesa. Cuando mesa autorice, se corrige si cambia.'} Es un dato del gerente: ningún archivo del sistema trae el monto.</div>
     <label>Comentario (opcional)</label><textarea id="m_com"></textarea>
     <div class="err" id="m_err"></div>
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="m_ok">Guardar monto</button></div>
@@ -1247,8 +1247,8 @@ function openDetalle(id){
   sh.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>b.closest('.form').classList.remove('on'));
   // etapa
   const syncEt=()=>{const et=$('#e_etapa').value,pm=MONTO_ETAPAS.includes(et);$('#e_montoW').hidden=!pm;
-    $('#e_montoL').textContent=et==='Por desembolsar'?'Monto que autorizó mesa (obligatorio)':'Monto a desembolsar (obligatorio)';
-    $('#e_montoN').textContent=et==='Por desembolsar'&&s.monto?'Tenía '+money(s.monto)+'. Si mesa autorizó menos, corrígelo.':'Estimado: es lo que verá dirección como monto en proceso.';
+    $('#e_montoL').textContent=et==='Por desembolsar'?'Monto que autorizó mesa (obligatorio)':'Monto solicitado: el que se manda a mesa (obligatorio)';
+    $('#e_montoN').textContent=et==='Por desembolsar'?(s.monto?'Se mandó por '+money(s.monto)+'. Si mesa autorizó otro monto, corrígelo.':'Pon el monto que autorizó mesa.'):'Lo que pidió el cliente y viste en el negocio. Si mesa luego autoriza otro monto, se corrige al pasarla a Por desembolsar.';
     const cfg=ETAPAS[et];$('#e_fechaW').hidden=cfg.fecha==='no';$('#e_fechaL').textContent=cfg.fecha==='req'?'Fecha compromiso':'Fecha compromiso (opcional)';$('#e_comL').textContent=cfg.comReq?'¿Qué pasó? (obligatorio)':'Comentario (opcional)';};
   $('#e_etapa').onchange=syncEt;syncEt();
   $('#e_ok').onclick=()=>{
@@ -1514,7 +1514,7 @@ function renderEmb(){
       <div class="kpi"><b>${mk(MT.mesa)}</b><span>En mesa · ${T.mesa}</span></div>
       <div class="kpi"><b style="color:var(--ok)">${mk(MT.aut)}</b><span>Autorizado · ${T.aut}</span></div>
     </div>
-    <p class="note" style="margin:4px 2px 0">💲 Montos <b>estimados según gerente</b> (ningún archivo del sistema trae el monto). En proceso: <b>${money(mtTot)}</b>${SM.subir+SM.mesa+SM.aut?` · <b style="color:var(--warn)">${SM.subir+SM.mesa+SM.aut} cuentas sin monto</b>`:''}.</p>
+    <p class="note" style="margin:4px 2px 0">💲 Montos <b>según gerente</b>: por subir y en mesa = monto solicitado; autorizado = lo que autorizó mesa (ningún archivo del sistema trae el monto). En proceso: <b>${money(mtTot)}</b>${SM.subir+SM.mesa+SM.aut?` · <b style="color:var(--warn)">${SM.subir+SM.mesa+SM.aut} cuentas sin monto</b>`:''}.</p>
     <h4 class="secc">Abiertos <small>(${ab})</small></h4>
     ${EMB.slice(0,5).map(fila).join('')}
     <h4 class="secc">Cerrados <small>(${T.des+T.rech})</small></h4>
