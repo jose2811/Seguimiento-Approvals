@@ -156,7 +156,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.2</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.3</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1510,9 +1510,9 @@ function renderEmb(){
       <div class="kpi"><b style="color:var(--ok)">${pct(T.des,N)}</b><span>Conversión</span></div>
     </div>
     <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-top:6px">
-      <div class="kpi"><b>${mk(MT.subir)}</b><span>Por subir a mesa · ${T.subir}</span></div>
-      <div class="kpi"><b>${mk(MT.mesa)}</b><span>En mesa · ${T.mesa}</span></div>
-      <div class="kpi"><b style="color:var(--ok)">${mk(MT.aut)}</b><span>Autorizado · ${T.aut}</span></div>
+      <div class="kpi" data-mk="subir"><b>${mk(MT.subir)}</b><span>Por subir a mesa · ${T.subir} ›</span></div>
+      <div class="kpi" data-mk="mesa"><b>${mk(MT.mesa)}</b><span>En mesa · ${T.mesa} ›</span></div>
+      <div class="kpi" data-mk="aut"><b style="color:var(--ok)">${mk(MT.aut)}</b><span>Autorizado, por desembolsar · ${T.aut} ›</span></div>
     </div>
     <p class="note" style="margin:4px 2px 0">💲 Montos <b>según gerente</b>: por subir y en mesa = monto solicitado; autorizado = lo que autorizó mesa (ningún archivo del sistema trae el monto). En proceso: <b>${money(mtTot)}</b>${SM.subir+SM.mesa+SM.aut?` · <b style="color:var(--warn)">${SM.subir+SM.mesa+SM.aut} cuentas sin monto</b>`:''}.</p>
     <h4 class="secc">Abiertos <small>(${ab})</small></h4>
@@ -1527,6 +1527,7 @@ function renderEmb(){
   if($('#eBack'))$('#eBack').onclick=()=>{if(E.ase)E.ase='';else if(E.suc)E.suc='';else E.reg='';renderEmb();};
   if($('#eCsv'))$('#eCsv').onclick=exportaCSV;
   el.querySelectorAll('.erow[data-k]').forEach(d=>d.onclick=()=>{if(T[d.dataset.k])irPend(d.dataset.k,sc0);});
+  el.querySelectorAll('.kpi[data-mk]').forEach(d=>d.onclick=()=>{if(T[d.dataset.mk])irPend(d.dataset.mk,sc0);});
   el.querySelectorAll('.smo').forEach(d=>d.onclick=ev=>{ev.stopPropagation();irPend(d.dataset.sk,sc0);F.emb.sinm=true;renderLista();});
   el.querySelectorAll('.dsc').forEach(d=>d.onclick=ev=>{ev.stopPropagation();irPend(d.dataset.dk,sc0);F.emb.desac=true;renderLista();});
   const m10=el.querySelector('.m10');if(m10)m10.onclick=ev=>{ev.stopPropagation();F.emb=null;F.reg=sc0.reg||'';F.suc=sc0.suc||'';F.asesor=sc0.ase||'';F.txt='';F.seg='';F.q='f_mesa10';irTab('lista');};
