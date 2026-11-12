@@ -119,6 +119,7 @@ h4{margin:14px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.03e
 .erow .en{grid-area:n;text-align:right}.erow .en b{font-size:20px;margin-right:6px}
 .erow .eb{grid-area:b;height:8px;background:#eef2f7;border-radius:4px;overflow:hidden}.erow .eb i{display:block;height:100%;border-radius:4px}
 .erow .ego{grid-area:g;color:var(--mut);font-size:18px}
+.etab tr.sub td{background:#f8fafc;font-size:12.5px}.etab tr.sub td:first-child{padding-left:22px;color:#374151}.etab .xp{display:inline-block;width:18px;text-align:center;color:var(--brand);font-weight:700;cursor:pointer}
 .etab td.lk{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .panel h3{margin:0 0 8px;font-size:15px}
 .tw{overflow-x:auto}
@@ -155,7 +156,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.8</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.9</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1439,7 +1440,7 @@ const enRango=(s,r)=>{const f=s.c.fsol||'';if(!r.desde&&!r.hasta)return true;ret
 const rangoTxt=r=>!r.desde&&!r.hasta?'desde el inicio del seguimiento':r.desde&&r.hasta?'del '+fmt(r.desde,false)+' al '+fmt(r.hasta,false):r.desde?'desde el '+fmt(r.desde,false):'hasta el '+fmt(r.hasta,false);
 function irPend(k,sc){const r=rangoDe(E.per);F.emb={k,desde:r.desde,hasta:r.hasta};F.reg=sc.reg||'';F.suc=sc.suc||'';F.asesor=sc.ase||'';F.q='f_abiertos';F.txt='';F.seg='';irTab('lista');}
 function renderEmb(){
-  const el=$('#vEmb'),all0=visibles();
+  const el=$('#vEmb'),all0=visibles();if(!E.exp)E.exp=new Set();
   if(!all0.length){el.innerHTML='<div class="empty">Aún no hay cuentas. Aparecen en cuanto se carga el funnel.</div>';return;}
   if(!MULTI()){E.reg='';E.suc='';}
   const r=rangoDe(E.per);if(E.per!=='pers'){E.desde=r.desde;E.hasta=r.hasta;}
@@ -1462,9 +1463,12 @@ function renderEmb(){
   if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});
     const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
     const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td></tr>`;};
-    tabla=`<div class="panel"><h3>${gT}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th></tr>
-      ${ks.map(k=>tr(gName(k),k,g[k])).join('')}${ks.length>1?tr('Total',null,scope,true):''}</table></div>
-      <p class="note">Toca un nombre para bajar de nivel, o un número para ver esas cuentas.</p></div>`;}
+    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th></tr>
+      ${ks.map(k=>{let h=tr(gName(k),k,g[k]);if(gAttr!=='reg')return h;const ab=E.exp.has(k);
+        h=h.replace(`<td data-g="${esc(k)}" style="cursor:pointer">`,`<td data-g="${esc(k)}" style="cursor:pointer"><span class="xp" data-x="${esc(k)}" title="Ver oficinas">${ab?'▾':'▸'}</span> `);
+        if(!ab)return h;const so={};g[k].forEach(s=>{(so[s.c.suc]=so[s.c.suc]||[]).push(s);});
+        return h+Object.keys(so).sort((a,b)=>so[b].length-so[a].length||a.localeCompare(b)).map(sc=>tr(tit(sc.replace('CI-','')),'S|'+k+'|'+sc,so[sc]).replace('<tr class="">','<tr class="sub">')).join('');}).join('')}${ks.length>1?tr('Total',null,scope,true):''}</table></div>
+      <p class="note">${gAttr==='reg'?'Toca ▸ para ver las oficinas de una región, el nombre para entrar a ella, o un número para ver esas cuentas.':'Toca un nombre para bajar de nivel, o un número para ver esas cuentas.'}</p></div>`;}
   const nivel=E.ase?esc(corto(E.ase)):E.suc?esc(tit(E.suc.replace('CI-',''))):!MULTI()?esc(vistaNombre()):Rg?'Región '+esc(tit(Rg)):'Subdirección';
   const atras=E.ase?(E.suc?tit(E.suc.replace('CI-','')):vistaNombre()):E.suc?(Rg?'Región '+tit(Rg):'Subdirección'):(E.reg&&VISTA==='GP')?'Subdirección':'';
   el.innerHTML=`<div class="panel">
@@ -1494,8 +1498,11 @@ function renderEmb(){
   const pd=el.querySelector('.pdes');if(pd)pd.onclick=ev=>{ev.stopPropagation();irPend('mesa',sc0);F.emb.pdes=true;renderLista();};
   el.querySelectorAll('.dsc').forEach(d=>d.onclick=ev=>{ev.stopPropagation();irPend(d.dataset.dk,sc0);F.emb.desac=true;renderLista();});
   const m10=el.querySelector('.m10');if(m10)m10.onclick=ev=>{ev.stopPropagation();F.emb=null;F.reg=sc0.reg||'';F.suc=sc0.suc||'';F.asesor=sc0.ase||'';F.txt='';F.seg='';F.q='f_mesa10';irTab('lista');};
-  el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
-  el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOf(td.dataset.gk):sc0));
+  const scOfX=k=>k.startsWith('S|')?{reg:k.split('|')[1],suc:k.split('|')[2]}:scOf(k);
+  el.querySelectorAll('.xp').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const k=x.dataset.x;E.exp.has(k)?E.exp.delete(k):E.exp.add(k);renderEmb();});
+  if($('#eExpAll'))$('#eExpAll').onclick=()=>{const ks=[...el.querySelectorAll('.xp')].map(x=>x.dataset.x);if(E.exp.size>=ks.length)E.exp.clear();else ks.forEach(k=>E.exp.add(k));renderEmb();};
+  el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(k.startsWith('S|')){E.reg=k.split('|')[1];E.suc=k.split('|')[2];}else if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
+  el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOfX(td.dataset.gk):sc0));
 }
 const ALZA_TASA='2026-10-16'; // fecha del alza de tasas, para comparar antes / después
 function tasaHTML(all){const r=all.filter(s=>s.cierre==='rech'&&/^Tasa/.test(s.rech.motivo||''));
