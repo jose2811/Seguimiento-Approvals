@@ -156,7 +156,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.10</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.11</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1447,8 +1447,8 @@ function exportaTablaEmb(){
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const mt=(a,k)=>a.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0);
   const q=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión %'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
-  const fila=(niv,reg,suc,ase,a)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),a.length?Math.round(c.des*100/a.length):0].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
+  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
+  const fila=(niv,reg,suc,ase,a)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),(a.length?Math.round(c.des*100/a.length):0)+'%'].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
   const grp=(a,f)=>{const g={};a.forEach(s=>{const k=f(s);(g[k]=g[k]||[]).push(s);});return Object.keys(g).sort((x,y)=>g[y].length-g[x].length||x.localeCompare(y)).map(k=>[k,g[k]]);};
   const L=[cols.map(q).join(',')],ofi=x=>tit(x.replace('CI-',''));
   if(E.ase){L.push(fila('Asesor',tit(REG(scope[0].c.suc)||''),ofi(scope[0].c.suc),corto(E.ase),scope));}
