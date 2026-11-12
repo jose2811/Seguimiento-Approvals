@@ -119,7 +119,16 @@ h4{margin:14px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.03e
 .erow .en{grid-area:n;text-align:right}.erow .en b{font-size:20px;margin-right:6px}
 .erow .eb{grid-area:b;height:8px;background:#eef2f7;border-radius:4px;overflow:hidden}.erow .eb i{display:block;height:100%;border-radius:4px}
 .erow .ego{grid-area:g;color:var(--mut);font-size:18px}
-.etab tr.sub td{background:#f8fafc;font-size:12.5px}.etab tr.sub td:first-child{padding-left:22px;color:#374151}.etab .xp{display:inline-block;width:18px;text-align:center;color:var(--brand);font-weight:700;cursor:pointer}
+.etw{max-height:75vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.etab{border-collapse:separate;border-spacing:0}
+.etab tr{background:#fff}.etab tr:nth-child(even){background:#f6f8fa}
+.etab tr.rg{background:#e9f5f4}.etab tr.rg td{font-weight:600}
+.etab tr.tot{background:#eef2f6}.etab tr.tot td{background:inherit}
+.etab tr:hover{background:#eef6ff}
+.etab th{position:sticky;top:0;z-index:2;background:#fff;box-shadow:0 1px 0 var(--line)}
+.etab td:first-child,.etab th:first-child{position:sticky;left:0;z-index:1;background:inherit;text-align:left;box-shadow:1px 0 0 var(--line)}
+.etab th:first-child{z-index:3;background:#fff;box-shadow:1px 1px 0 var(--line)}
+.etab tr.sub td{font-size:12.5px}.etab tr.sub td:first-child{padding-left:22px;color:#374151}.etab .xp{display:inline-block;width:18px;text-align:center;color:var(--brand);font-weight:700;cursor:pointer}
 .etab td.lk{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .panel h3{margin:0 0 8px;font-size:15px}
 .tw{overflow-x:auto}
@@ -156,7 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.12</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.13</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -338,7 +347,9 @@ async function readXlsx(buf){
 let DB=load(), HOY=hoyISO();
 function blank(){return {v:1,cfg:{abr:1},cuentas:{},ev:{},imports:[]};}
 function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);if(d&&d.cuentas){d.cfg=d.cfg||{};if(!d.cfg.abr){Object.values(d.cuentas).forEach(c=>c.nombre=abrevia(c.nombre));d.cfg.abr=1;try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}}return d;}}}catch(e){}return blank();}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){toast('⚠ No se pudo guardar en este navegador');}}
+let SAVE_AVISO=false;
+// Si la copia local ya no cabe (pasa con toda la subdirección en celular), se borra para dejar espacio a las capturas pendientes; los datos se vuelven a bajar de la nube
+function save(){if(SAVE_AVISO)return;try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){SAVE_AVISO=true;try{localStorage.removeItem(KEY);}catch(_){}persistQ();console.warn('Copia local desactivada: no cabe en este navegador. Los datos y capturas siguen en la nube.',e);}}
 let VISTA=(()=>{try{return localStorage.getItem(KEYV)||'GP';}catch(e){return 'GP';}})();
 /* Niveles: admin (carga archivos, ve todo) · subdireccion (todo) · regional (su región) · gerente (su sucursal) */
 const REG=s=>(DB.reg&&DB.reg[s])||'';
@@ -1490,8 +1501,8 @@ function renderEmb(){
     const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
     const dpOf=(k,tot)=>tot?desP.length:k.startsWith('S|')?desP.filter(s=>s.c.suc===k.split('|')[2]).length:desP.filter(s=>gk(s)===k).length;
     const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td>${(()=>{const n=dpOf(k,tot);return `<td${n?` class="lk" data-dp="${tot?'':esc(k)}"`:''} style="color:#15803d;font-weight:700">${n}</td>`;})()}</tr>`;};
-    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th title="Desembolsados en las fechas elegidas, aunque la solicitud sea de antes">Desemb. del periodo</th></tr>
-      ${ks.map(k=>{let h=tr(gName(k),k,g[k]);if(gAttr!=='reg')return h;const ab=E.exp.has(k);
+    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw etw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th title="Desembolsados en las fechas elegidas, aunque la solicitud sea de antes">Desemb. del periodo</th></tr>
+      ${ks.map(k=>{let h=tr(gName(k),k,g[k]);if(gAttr!=='reg')return h;h=h.replace('<tr class="">','<tr class="rg">');const ab=E.exp.has(k);
         h=h.replace(`<td data-g="${esc(k)}" style="cursor:pointer">`,`<td data-g="${esc(k)}" style="cursor:pointer"><span class="xp" data-x="${esc(k)}" title="Ver oficinas">${ab?'▾':'▸'}</span> `);
         if(!ab)return h;const so={};g[k].forEach(s=>{(so[s.c.suc]=so[s.c.suc]||[]).push(s);});desP.forEach(s=>{if(gk(s)===k&&!so[s.c.suc])so[s.c.suc]=[];});
         return h+Object.keys(so).sort((a,b)=>so[b].length-so[a].length||a.localeCompare(b)).map(sc=>tr(tit(sc.replace('CI-','')),'S|'+k+'|'+sc,so[sc]).replace('<tr class="">','<tr class="sub">')).join('');}).join('')}${ks.length>1?tr('Total',null,scope,true):''}</table></div>
