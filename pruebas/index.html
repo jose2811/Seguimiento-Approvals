@@ -157,7 +157,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.7</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.2.8</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -994,7 +994,7 @@ function renderLista(){
   const k={ab:ab.length,a30:ab.filter(s=>s.dias>30).length,venc:ab.filter(s=>s.venc).length,rep:ab.filter(s=>s.repros>=2).length};
   const regsL=[...new Set(all.map(s=>REG(s.c.suc)).filter(Boolean))].sort();if(F.reg&&!regsL.includes(F.reg))F.reg='';
   const sucs=[...new Set(all.filter(s=>!F.reg||REG(s.c.suc)===F.reg).map(s=>s.c.suc))].sort();if(F.suc&&!sucs.includes(F.suc))F.suc='';
-  const base=all.filter(s=>(!F.reg||REG(s.c.suc)===F.reg)&&(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg)&&(!F.emb||enRango(s,F.emb)));
+  const base=all.filter(s=>(!F.reg||REG(s.c.suc)===F.reg)&&(!F.suc||s.c.suc===F.suc)&&(!F.seg||s.seg===F.seg)&&(!F.emb||(F.emb.dp?desEnRango(s,F.emb):enRango(s,F.emb))));
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
   const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
@@ -1030,7 +1030,7 @@ function renderLista(){
     <div class="kpi ${k.rep?'warn':''}" data-q="f_rep"><b>${k.rep}</b><span>↻ 2+ veces</span></div>
   </div>`}
   <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
-  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}${F.emb.desac?' · ⚠ solo según gerente':''}${F.emb.pdes?' · ⏳ gerente dice autorizada':''}${F.emb.sinm?' · 💲 sin monto':''}</b><br><small style="color:var(--mut)">Aceptados con solicitud ${esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
+  ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}${F.emb.dp?' del periodo (por fecha de desembolso)':''}${F.emb.desac?' · ⚠ solo según gerente':''}${F.emb.pdes?' · ⏳ gerente dice autorizada':''}${F.emb.sinm?' · 💲 sin monto':''}</b><br><small style="color:var(--mut)">${F.emb.dp?'Desembolsados '+esc(rangoTxt(F.emb))+', sin importar cuándo se solicitaron':'Aceptados con solicitud '+esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
   <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]&&!F.emb?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${regsL.length>1?`<select id="fReg"><option value="">Todas las regiones</option>${regsL.map(x=>`<option value="${esc(x)}" ${F.reg===x?'selected':''}>${esc(tit(x))}</option>`).join('')}</select>`:''}
@@ -1465,25 +1465,29 @@ function rangoDe(per){
     :per==='mesp'?{desde:mp.slice(0,8)+'01',hasta:mp}:per==='todo'?{desde:'',hasta:''}:{desde:E.desde,hasta:E.hasta};
 }
 const enRango=(s,r)=>{const f=s.c.fsol||'';if(!r.desde&&!r.hasta)return true;return !!f&&(!r.desde||f>=r.desde)&&(!r.hasta||f<=r.hasta);};
+/* Desembolsos en el periodo: por FECHA DE DESEMBOLSO, sin importar cuándo se solicitó (la conversión del embudo sigue por fecha de solicitud) */
+const esDes=s=>s.cierre==='des'||s.cierre==='desPC';
+const desEnRango=(s,r)=>esDes(s)&&!!s.fC&&(!r.desde||s.fC>=r.desde)&&(!r.hasta||s.fC<=r.hasta);
 const rangoTxt=r=>!r.desde&&!r.hasta?'desde el inicio del seguimiento':r.desde&&r.hasta?'del '+fmt(r.desde,false)+' al '+fmt(r.hasta,false):r.desde?'desde el '+fmt(r.desde,false):'hasta el '+fmt(r.hasta,false);
 function irPend(k,sc){const r=rangoDe(E.per);F.emb={k,desde:r.desde,hasta:r.hasta};F.reg=sc.reg||'';F.suc=sc.suc||'';F.asesor=sc.ase||'';F.q='f_abiertos';F.txt='';F.seg='';irTab('lista');}
 /* Exporta el cuadro del Embudo (región → oficinas, u oficina/asesor según el nivel) tal como se ve, con todas las oficinas */
 function exportaTablaEmb(){
   const scope=EMB_LIST||[];if(!scope.length)return toast('No hay cuentas en este periodo');
   const conM=typeof pideMonto==='function',r=rangoDe(E.per);
+  const desP=visibles().filter(s=>desEnRango(s,r)&&(!E.reg||REG(s.c.suc)===E.reg)&&(!E.suc||s.c.suc===E.suc)&&(!E.ase||s.asesorAct===E.ase));
   const baseReg=VISTA.startsWith('R:')?VISTA.slice(2):'',Rg=E.reg||baseReg;
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const mt=(a,k)=>a.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0);
   const q=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
-  const fila=(niv,reg,suc,ase,a)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),(a.length?Math.round(c.des*100/a.length):0)+'%'].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
-  const grp=(a,f)=>{const g={};a.forEach(s=>{const k=f(s);(g[k]=g[k]||[]).push(s);});return Object.keys(g).sort((x,y)=>g[y].length-g[x].length||x.localeCompare(y)).map(k=>[k,g[k]]);};
+  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión','Desembolsos del periodo'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
+  const fila=(niv,reg,suc,ase,a,d)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),(a.length?Math.round(c.des*100/a.length):0)+'%',d.length].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
+  const grp=(a,f,extra)=>{const g={};a.forEach(s=>{const k=f(s);(g[k]=g[k]||[]).push(s);});(extra||[]).forEach(s=>{const k=f(s);if(!g[k])g[k]=[];});return Object.keys(g).sort((x,y)=>g[y].length-g[x].length||x.localeCompare(y)).map(k=>[k,g[k]]);};
   const L=[cols.map(q).join(',')],ofi=x=>tit(x.replace('CI-',''));
-  if(E.ase){L.push(fila('Asesor',tit(REG(scope[0].c.suc)||''),ofi(scope[0].c.suc),corto(E.ase),scope));}
-  else if(E.suc||!MULTI()){const sc=E.suc||VISTA;for(const [k,a] of grp(scope,s=>s.asesorAct||'(sin asesor)'))L.push(fila('Asesor',tit(REG(sc)||''),ofi(sc),corto(k),a));L.push(fila('Total oficina',tit(REG(sc)||''),ofi(sc),'',scope));}
-  else if(Rg){for(const [k,a] of grp(scope,s=>s.c.suc))L.push(fila('Oficina',tit(Rg),ofi(k),'',a));L.push(fila('Total región',tit(Rg),'','',scope));}
-  else{for(const [rg,a] of grp(scope,s=>REG(s.c.suc)||'(sin región)')){L.push(fila('Región',tit(rg),'','',a));for(const [k,b] of grp(a,s=>s.c.suc))L.push(fila('Oficina',tit(rg),ofi(k),'',b));}L.push(fila('Total subdirección','','','',scope));}
-  L.push('');L.push(q('Aceptados con fecha de solicitud '+rangoTxt(r)+'. Paso en el embudo al '+fmt(HOY,false)+'.'+(conM?' Montos según gerente (estimados).':'')));
+  if(E.ase){L.push(fila('Asesor',tit(REG(scope[0].c.suc)||''),ofi(scope[0].c.suc),corto(E.ase),scope,desP));}
+  else if(E.suc||!MULTI()){const sc=E.suc||VISTA;for(const [k,a] of grp(scope,s=>s.asesorAct||'(sin asesor)',desP))L.push(fila('Asesor',tit(REG(sc)||''),ofi(sc),corto(k),a,desP.filter(s=>(s.asesorAct||'(sin asesor)')===k)));L.push(fila('Total oficina',tit(REG(sc)||''),ofi(sc),'',scope,desP));}
+  else if(Rg){for(const [k,a] of grp(scope,s=>s.c.suc,desP))L.push(fila('Oficina',tit(Rg),ofi(k),'',a,desP.filter(s=>s.c.suc===k)));L.push(fila('Total región',tit(Rg),'','',scope,desP));}
+  else{for(const [rg,a] of grp(scope,s=>REG(s.c.suc)||'(sin región)',desP)){L.push(fila('Región',tit(rg),'','',a,desP.filter(s=>(REG(s.c.suc)||'(sin región)')===rg)));for(const [k,b] of grp(a,s=>s.c.suc,desP.filter(s=>(REG(s.c.suc)||'(sin región)')===rg)))L.push(fila('Oficina',tit(rg),ofi(k),'',b,desP.filter(s=>s.c.suc===k)));}L.push(fila('Total subdirección','','','',scope,desP));}
+  L.push('');L.push(q('Aceptados con fecha de solicitud '+rangoTxt(r)+'. Paso en el embudo al '+fmt(HOY,false)+'. Desembolsos del periodo = por fecha de desembolso, aunque la solicitud sea anterior.'+(conM?' Montos según gerente (estimados).':'')));
   const b=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='embudo_'+norm(E.ase?corto(E.ase):E.suc?E.suc.replace('CI-',''):E.reg?E.reg:vistaNombre()).replace(/\s+/g,'_')+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   toast('✔ Cuadro exportado ('+(L.length-3)+' filas). Ábrelo en Excel.');
@@ -1496,13 +1500,14 @@ function renderEmb(){
   const baseReg=VISTA.startsWith('R:')?VISTA.slice(2):'',Rg=E.reg||baseReg;
   const scope=all0.filter(s=>enRango(s,r)&&(!E.reg||REG(s.c.suc)===E.reg)&&(!E.suc||s.c.suc===E.suc)&&(!E.ase||s.asesorAct===E.ase));
   EMB_LIST=scope;
+  const desP=all0.filter(s=>desEnRango(s,r)&&(!E.reg||REG(s.c.suc)===E.reg)&&(!E.suc||s.c.suc===E.suc)&&(!E.ase||s.asesorAct===E.ase));
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const T=cnt(scope),N=scope.length,max=Math.max(1,...EMB.map(x=>T[x[0]]));
   const desacK=k=>scope.filter(s=>embDe(s)===k&&s.desac).length,pdesK=scope.filter(s=>embDe(s)==='mesa'&&s.etapa==='Por desembolsar').length;
   const MT={},SM={};['subir','mesa','aut'].forEach(k=>{const a=scope.filter(s=>embDe(s)===k&&s.abierto);MT[k]=a.reduce((t,s)=>t+(s.monto||0),0);SM[k]=a.filter(s=>!s.monto).length;});
   const mtTot=MT.subir+MT.mesa+MT.aut;const mesa10=scope.filter(s=>embDe(s)==='mesa'&&s.diasMesa>=MESA_DIAS).length;const ab=T.sing+T.seg+T.subir+T.mesa+T.aut,mesaSinMot=scope.filter(s=>s.abierto&&s.c.mres==='N').length;
   const sc0={reg:E.reg,suc:E.suc,ase:E.ase};
-  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0] in MT&&n?`<small style="display:block;color:var(--ink);font-weight:700">💲 ${money(MT[x[0]])} estimado${SM[x[0]]?` · <span class="smo" data-sk="${x[0]}" style="color:var(--warn);text-decoration:underline dotted">${SM[x[0]]} sin monto ›</span>`:''}</small>`:''}${x[0]==='mesa'&&pdesK?`<small class="pdes" style="display:block;color:var(--warn);font-weight:700">⏳ ${pdesK} el gerente dice que ya está autorizada; el sistema aún no lo confirma ›</small>`:''}${(x[0]==='mesa'||x[0]==='aut')&&desacK(x[0])?`<small class="dsc" data-dk="${x[0]}" style="display:block;color:var(--bad);font-weight:700">⚠ ${desacK(x[0])} solo según gerente: el sistema no lo confirma ›</small>`:''}${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
+  const fila=x=>{const n=T[x[0]];return `<div class="erow${n?'':' e0'}" data-k="${x[0]}"><div class="el"><b>${x[1]}</b><small>${x[2]}</small>${x[0]==='des'&&(r.desde||r.hasta)?`<small class="dpc" style="display:block;color:#15803d;font-weight:700">📅 ${desP.length} desembolsados en el periodo, contando solicitudes anteriores${desP.length?' ›':''}</small>`:''}${x[0] in MT&&n?`<small style="display:block;color:var(--ink);font-weight:700">💲 ${money(MT[x[0]])} estimado${SM[x[0]]?` · <span class="smo" data-sk="${x[0]}" style="color:var(--warn);text-decoration:underline dotted">${SM[x[0]]} sin monto ›</span>`:''}</small>`:''}${x[0]==='mesa'&&pdesK?`<small class="pdes" style="display:block;color:var(--warn);font-weight:700">⏳ ${pdesK} el gerente dice que ya está autorizada; el sistema aún no lo confirma ›</small>`:''}${(x[0]==='mesa'||x[0]==='aut')&&desacK(x[0])?`<small class="dsc" data-dk="${x[0]}" style="display:block;color:var(--bad);font-weight:700">⚠ ${desacK(x[0])} solo según gerente: el sistema no lo confirma ›</small>`:''}${x[0]==='mesa'&&mesa10&&VER_DIAS_MESA?`<small class="m10" style="display:block;color:var(--warn);font-weight:700">🕒 ${mesa10} con más de ${MESA_DIAS} días en mesa ›</small>`:''}</div><div class="en"><b>${n}</b><small>${pct(n,N)}</small></div><div class="eb"><i style="width:${n*100/max}%;background:${x[3]}"></i></div><span class="ego">${n?'›':''}</span></div>`;};
   // tabla un nivel abajo
   let gk=null,gName,gAttr,gT='';
   if(E.ase){gk=null;}
@@ -1511,13 +1516,14 @@ function renderEmb(){
   else{gk=s=>REG(s.c.suc)||'(sin región)';gName=k=>tit(k);gAttr='reg';gT='Por región';}
   const scOf=k=>gAttr==='ase'?{...sc0,ase:k}:gAttr==='suc'?{reg:E.reg,suc:k}:{reg:k};
   let tabla='';
-  if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});
+  if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});desP.forEach(s=>{const k=gk(s);if(!g[k])g[k]=[];}); // que no desaparezca quien desembolsó en el periodo aunque no tenga aceptados nuevos
     const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
-    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td>${['subir','mesa','aut'].map(k=>`<td>${mk(arr.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0))}</td>`).join('')}</tr>`;};
-    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th>$ Por subir</th><th>$ En mesa</th><th>$ Autoriz.</th></tr>
+    const dpOf=(k,tot)=>tot?desP.length:k.startsWith('S|')?desP.filter(s=>s.c.suc===k.split('|')[2]).length:desP.filter(s=>gk(s)===k).length;
+    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td>${(()=>{const n=dpOf(k,tot);return `<td${n?` class="lk" data-dp="${tot?'':esc(k)}"`:''} style="color:#15803d;font-weight:700">${n}</td>`;})()}${['subir','mesa','aut'].map(k=>`<td>${mk(arr.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0))}</td>`).join('')}</tr>`;};
+    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th title="Desembolsados en las fechas elegidas, aunque la solicitud sea de antes">Desemb. del periodo</th><th>$ Por subir</th><th>$ En mesa</th><th>$ Autoriz.</th></tr>
       ${ks.map(k=>{let h=tr(gName(k),k,g[k]);if(gAttr!=='reg')return h;const ab=E.exp.has(k);
         h=h.replace(`<td data-g="${esc(k)}" style="cursor:pointer">`,`<td data-g="${esc(k)}" style="cursor:pointer"><span class="xp" data-x="${esc(k)}" title="Ver oficinas">${ab?'▾':'▸'}</span> `);
-        if(!ab)return h;const so={};g[k].forEach(s=>{(so[s.c.suc]=so[s.c.suc]||[]).push(s);});
+        if(!ab)return h;const so={};g[k].forEach(s=>{(so[s.c.suc]=so[s.c.suc]||[]).push(s);});desP.forEach(s=>{if(gk(s)===k&&!so[s.c.suc])so[s.c.suc]=[];});
         return h+Object.keys(so).sort((a,b)=>so[b].length-so[a].length||a.localeCompare(b)).map(sc=>tr(tit(sc.replace('CI-','')),'S|'+k+'|'+sc,so[sc]).replace('<tr class="">','<tr class="sub">')).join('');}).join('')}${ks.length>1?tr('Total',null,scope,true):''}</table></div>
       <p class="note">${gAttr==='reg'?'Toca ▸ para ver las oficinas de una región, el nombre para entrar a ella, o un número para ver esas cuentas.':'Toca un nombre para bajar de nivel, o un número para ver esas cuentas.'}</p></div>`;}
   const nivel=E.ase?esc(corto(E.ase)):E.suc?esc(tit(E.suc.replace('CI-',''))):!MULTI()?esc(vistaNombre()):Rg?'Región '+esc(tit(Rg)):'Subdirección';
@@ -1562,6 +1568,9 @@ function renderEmb(){
   if($('#eTabCsv'))$('#eTabCsv').onclick=exportaTablaEmb;
   if($('#eExpAll'))$('#eExpAll').onclick=()=>{const ks=[...el.querySelectorAll('.xp')].map(x=>x.dataset.x);if(E.exp.size>=ks.length)E.exp.clear();else ks.forEach(k=>E.exp.add(k));renderEmb();};
   el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(k.startsWith('S|')){E.reg=k.split('|')[1];E.suc=k.split('|')[2];}else if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
+  const irDP=sc=>{F.emb={k:'des',dp:true,desde:r.desde,hasta:r.hasta};F.reg=sc.reg||'';F.suc=sc.suc||'';F.asesor=sc.ase||'';F.q='f_abiertos';F.txt='';F.seg='';irTab('lista');};
+  el.querySelectorAll('td[data-dp]').forEach(td=>td.onclick=()=>irDP(td.dataset.dp?scOfX(td.dataset.dp):sc0));
+  const dpc=el.querySelector('.dpc');if(dpc&&desP.length)dpc.onclick=ev=>{ev.stopPropagation();irDP(sc0);};
   el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOfX(td.dataset.gk):sc0));
 }
 const ALZA_TASA='2026-10-16'; // fecha del alza de tasas, para comparar antes / después
