@@ -156,7 +156,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.9</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.10</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1439,6 +1439,27 @@ function rangoDe(per){
 const enRango=(s,r)=>{const f=s.c.fsol||'';if(!r.desde&&!r.hasta)return true;return !!f&&(!r.desde||f>=r.desde)&&(!r.hasta||f<=r.hasta);};
 const rangoTxt=r=>!r.desde&&!r.hasta?'desde el inicio del seguimiento':r.desde&&r.hasta?'del '+fmt(r.desde,false)+' al '+fmt(r.hasta,false):r.desde?'desde el '+fmt(r.desde,false):'hasta el '+fmt(r.hasta,false);
 function irPend(k,sc){const r=rangoDe(E.per);F.emb={k,desde:r.desde,hasta:r.hasta};F.reg=sc.reg||'';F.suc=sc.suc||'';F.asesor=sc.ase||'';F.q='f_abiertos';F.txt='';F.seg='';irTab('lista');}
+/* Exporta el cuadro del Embudo (región → oficinas, u oficina/asesor según el nivel) tal como se ve, con todas las oficinas */
+function exportaTablaEmb(){
+  const scope=EMB_LIST||[];if(!scope.length)return toast('No hay cuentas en este periodo');
+  const conM=typeof pideMonto==='function',r=rangoDe(E.per);
+  const baseReg=VISTA.startsWith('R:')?VISTA.slice(2):'',Rg=E.reg||baseReg;
+  const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
+  const mt=(a,k)=>a.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0);
+  const q=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión %'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
+  const fila=(niv,reg,suc,ase,a)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),a.length?Math.round(c.des*100/a.length):0].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
+  const grp=(a,f)=>{const g={};a.forEach(s=>{const k=f(s);(g[k]=g[k]||[]).push(s);});return Object.keys(g).sort((x,y)=>g[y].length-g[x].length||x.localeCompare(y)).map(k=>[k,g[k]]);};
+  const L=[cols.map(q).join(',')],ofi=x=>tit(x.replace('CI-',''));
+  if(E.ase){L.push(fila('Asesor',tit(REG(scope[0].c.suc)||''),ofi(scope[0].c.suc),corto(E.ase),scope));}
+  else if(E.suc||!MULTI()){const sc=E.suc||VISTA;for(const [k,a] of grp(scope,s=>s.asesorAct||'(sin asesor)'))L.push(fila('Asesor',tit(REG(sc)||''),ofi(sc),corto(k),a));L.push(fila('Total oficina',tit(REG(sc)||''),ofi(sc),'',scope));}
+  else if(Rg){for(const [k,a] of grp(scope,s=>s.c.suc))L.push(fila('Oficina',tit(Rg),ofi(k),'',a));L.push(fila('Total región',tit(Rg),'','',scope));}
+  else{for(const [rg,a] of grp(scope,s=>REG(s.c.suc)||'(sin región)')){L.push(fila('Región',tit(rg),'','',a));for(const [k,b] of grp(a,s=>s.c.suc))L.push(fila('Oficina',tit(rg),ofi(k),'',b));}L.push(fila('Total subdirección','','','',scope));}
+  L.push('');L.push(q('Aceptados con fecha de solicitud '+rangoTxt(r)+'. Paso en el embudo al '+fmt(HOY,false)+'.'+(conM?' Montos según gerente (estimados).':'')));
+  const b=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='embudo_'+norm(E.ase?corto(E.ase):E.suc?E.suc.replace('CI-',''):E.reg?E.reg:vistaNombre()).replace(/\s+/g,'_')+'_'+HOY+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast('✔ Cuadro exportado ('+(L.length-3)+' filas). Ábrelo en Excel.');
+}
 function renderEmb(){
   const el=$('#vEmb'),all0=visibles();if(!E.exp)E.exp=new Set();
   if(!all0.length){el.innerHTML='<div class="empty">Aún no hay cuentas. Aparecen en cuanto se carga el funnel.</div>';return;}
@@ -1463,7 +1484,7 @@ function renderEmb(){
   if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});
     const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
     const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td></tr>`;};
-    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th></tr>
+    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th></tr>
       ${ks.map(k=>{let h=tr(gName(k),k,g[k]);if(gAttr!=='reg')return h;const ab=E.exp.has(k);
         h=h.replace(`<td data-g="${esc(k)}" style="cursor:pointer">`,`<td data-g="${esc(k)}" style="cursor:pointer"><span class="xp" data-x="${esc(k)}" title="Ver oficinas">${ab?'▾':'▸'}</span> `);
         if(!ab)return h;const so={};g[k].forEach(s=>{(so[s.c.suc]=so[s.c.suc]||[]).push(s);});
@@ -1500,6 +1521,7 @@ function renderEmb(){
   const m10=el.querySelector('.m10');if(m10)m10.onclick=ev=>{ev.stopPropagation();F.emb=null;F.reg=sc0.reg||'';F.suc=sc0.suc||'';F.asesor=sc0.ase||'';F.txt='';F.seg='';F.q='f_mesa10';irTab('lista');};
   const scOfX=k=>k.startsWith('S|')?{reg:k.split('|')[1],suc:k.split('|')[2]}:scOf(k);
   el.querySelectorAll('.xp').forEach(x=>x.onclick=ev=>{ev.stopPropagation();const k=x.dataset.x;E.exp.has(k)?E.exp.delete(k):E.exp.add(k);renderEmb();});
+  if($('#eTabCsv'))$('#eTabCsv').onclick=exportaTablaEmb;
   if($('#eExpAll'))$('#eExpAll').onclick=()=>{const ks=[...el.querySelectorAll('.xp')].map(x=>x.dataset.x);if(E.exp.size>=ks.length)E.exp.clear();else ks.forEach(k=>E.exp.add(k));renderEmb();};
   el.querySelectorAll('td[data-g]').forEach(td=>td.onclick=()=>{const k=td.dataset.g;if(k.startsWith('S|')){E.reg=k.split('|')[1];E.suc=k.split('|')[2];}else if(gAttr==='ase')E.ase=k;else if(gAttr==='suc')E.suc=k;else E.reg=k;renderEmb();window.scrollTo(0,0);});
   el.querySelectorAll('td[data-c]').forEach(td=>td.onclick=()=>irPend(td.dataset.c,td.dataset.gk?scOfX(td.dataset.gk):sc0));
