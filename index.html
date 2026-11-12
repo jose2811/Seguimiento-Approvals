@@ -165,7 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.13</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.14</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1462,8 +1462,8 @@ function exportaTablaEmb(){
   const cnt=a=>{const o={};EMB.forEach(x=>o[x[0]]=0);a.forEach(s=>o[embDe(s)]++);return o;};
   const mt=(a,k)=>a.filter(s=>embDe(s)===k&&s.abierto).reduce((t,s)=>t+(s.monto||0),0);
   const q=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión','Desembolsos del periodo'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
-  const fila=(niv,reg,suc,ase,a,d)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),(a.length?Math.round(c.des*100/a.length):0)+'%',d.length].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
+  const cols=['Nivel','Región','Oficina','Asesor','Aceptados',...EMB.map(x=>x[1]),'Conversión','Desembolsos del periodo: nuevos','Desembolsos del periodo: renovaciones','Desembolsos del periodo'].concat(conM?['$ Por subir a mesa','$ En mesa','$ Autorizado']:[]);
+  const fila=(niv,reg,suc,ase,a,d)=>{const c=cnt(a);return [niv,reg,suc,ase,a.length,...EMB.map(x=>c[x[0]]),(a.length?Math.round(c.des*100/a.length):0)+'%',d.filter(s=>!/^renov/i.test(s.c.tipo||'')).length,d.filter(s=>/^renov/i.test(s.c.tipo||'')).length,d.length].concat(conM?['subir','mesa','aut'].map(k=>mt(a,k)):[]).map(q).join(',');};
   const grp=(a,f,extra)=>{const g={};a.forEach(s=>{const k=f(s);(g[k]=g[k]||[]).push(s);});(extra||[]).forEach(s=>{const k=f(s);if(!g[k])g[k]=[];});return Object.keys(g).sort((x,y)=>g[y].length-g[x].length||x.localeCompare(y)).map(k=>[k,g[k]]);};
   const L=[cols.map(q).join(',')],ofi=x=>tit(x.replace('CI-',''));
   if(E.ase){L.push(fila('Asesor',tit(REG(scope[0].c.suc)||''),ofi(scope[0].c.suc),corto(E.ase),scope,desP));}
@@ -1499,9 +1499,10 @@ function renderEmb(){
   let tabla='';
   if(gk){const g={};scope.forEach(s=>{const k=gk(s);(g[k]=g[k]||[]).push(s);});desP.forEach(s=>{const k=gk(s);if(!g[k])g[k]=[];}); // que no desaparezca quien desembolsó en el periodo aunque no tenga aceptados nuevos
     const ks=Object.keys(g).sort((a,b)=>g[b].length-g[a].length||a.localeCompare(b));
-    const dpOf=(k,tot)=>tot?desP.length:k.startsWith('S|')?desP.filter(s=>s.c.suc===k.split('|')[2]).length:desP.filter(s=>gk(s)===k).length;
-    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td>${(()=>{const n=dpOf(k,tot);return `<td${n?` class="lk" data-dp="${tot?'':esc(k)}"`:''} style="color:#15803d;font-weight:700">${n}</td>`;})()}</tr>`;};
-    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw etw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th title="Desembolsados en las fechas elegidas, aunque la solicitud sea de antes">Desemb. del periodo</th></tr>
+    const dpL=(k,tot)=>tot?desP:k.startsWith('S|')?desP.filter(s=>s.c.suc===k.split('|')[2]):desP.filter(s=>gk(s)===k),dpOf=(k,tot)=>dpL(k,tot).length;
+    const esRen=s=>/^renov/i.test(s.c.tipo||'');
+    const tr=(name,k,arr,tot)=>{const c=cnt(arr);return `<tr class="${tot?'tot':''}">${tot?`<td>${esc(name)}</td>`:`<td data-g="${esc(k)}" style="cursor:pointer">${esc(name)} <span style="color:var(--mut)">›</span></td>`}<td>${arr.length}</td>${EMB.map(x=>`<td${c[x[0]]?` class="lk${x[0]==='sing'?' hw':''}" data-c="${x[0]}" data-gk="${tot?'':esc(k)}"`:''}>${c[x[0]]}</td>`).join('')}<td><b>${pct(c.des,arr.length)}</b></td>${(()=>{const L=dpL(k,tot),n=L.length,rn=L.filter(esRen).length;return `<td style="color:#15803d">${n-rn}</td><td style="color:#15803d">${rn}</td><td${n?` class="lk" data-dp="${tot?'':esc(k)}"`:''} style="color:#15803d;font-weight:700">${n}</td>`;})()}</tr>`;};
+    tabla=`<div class="panel"><h3 style="display:flex;align-items:center;gap:8px"><span style="flex:1">${gT}</span><button class="btn sec" id="eTabCsv" style="padding:3px 10px;font-size:12px">📤 Exportar cuadro</button>${gAttr==='reg'?`<button class="btn sec" id="eExpAll" style="padding:3px 10px;font-size:12px">${E.exp.size>=ks.length?'Ocultar oficinas':'Ver todas las oficinas'}</button>`:''}</h3><div class="tw etw"><table class="etab"><tr><th></th><th>Acept.</th><th>Sin gest.</th><th>Seguim.</th><th>Por subir</th><th>En mesa</th><th>Autoriz.</th><th>Desemb.</th><th>Rech.</th><th>Conv.</th><th title="Desembolsos del periodo: créditos nuevos">Nuevos</th><th title="Desembolsos del periodo: renovaciones">Renov.</th><th title="Desembolsados en las fechas elegidas, aunque la solicitud sea de antes">Desemb. del periodo</th></tr>
       ${ks.map(k=>{let h=tr(gName(k),k,g[k]);if(gAttr!=='reg')return h;h=h.replace('<tr class="">','<tr class="rg">');const ab=E.exp.has(k);
         h=h.replace(`<td data-g="${esc(k)}" style="cursor:pointer">`,`<td data-g="${esc(k)}" style="cursor:pointer"><span class="xp" data-x="${esc(k)}" title="Ver oficinas">${ab?'▾':'▸'}</span> `);
         if(!ab)return h;const so={};g[k].forEach(s=>{(so[s.c.suc]=so[s.c.suc]||[]).push(s);});desP.forEach(s=>{if(gk(s)===k&&!so[s.c.suc])so[s.c.suc]=[];});
