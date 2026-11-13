@@ -12,7 +12,7 @@
 //
 // IMPORTANTE: subir CACHE_VERSION cada vez que se publique un cambio grande,
 // para que los cachés viejos se limpien solos en el siguiente open.
-const CACHE_VERSION='v27';
+const CACHE_VERSION='v51';
 const CACHE_NAME = `seguimiento-aceptados-${CACHE_VERSION}`;
 const CORE_ASSETS = [
   './',
@@ -37,35 +37,23 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Red "colgada" (hay señal pero no responde): sin límite, el navegador se queda
-// esperando y la app sale en negro. A los 4 s damos por perdida la red y usamos
-// la última copia guardada (si la hay).
-function fetchConTimeout(req, ms = 4000){
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject('timeout'), ms);
-    fetch(req).then((r) => { clearTimeout(t); resolve(r); }, (e) => { clearTimeout(t); reject(e); });
-  });
-}
+// Red "colgada" (hay señal pero no responde): a los 8 s (página) o 4 s (lo demás) usamos la última copia guardada.
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   // Solo manejamos GET dentro del mismo origen — todo lo demás (Supabase, etc.)
   // pasa de largo tal cual, directo a la red, sin tocarlo.
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-
+  const esPagina = req.mode === 'navigate' || req.destination === 'document';
+  // La página siempre se pide sin caché del navegador, para no quedarse con una versión vieja
+  const red = fetch(esPagina ? new Request(req.url, { cache: 'no-store', credentials: 'same-origin' }) : req)
+    .then((r) => { if (r && r.ok) { const copy = r.clone(); caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {}); } return r; });
+  // Aunque se use la copia guardada por red lenta, la descarga sigue y deja lista la versión nueva para la próxima vez
+  event.waitUntil(red.catch(() => {}));
   event.respondWith(
-    fetchConTimeout(req)
-      .then((networkResp) => {
-        // Red disponible: usamos esa respuesta y actualizamos la copia guardada.
-        const copy = networkResp.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => {});
-        return networkResp;
-      })
-      .catch(() =>
-        // Sin red en este momento: usamos lo último que se guardó.
-        // Si tampoco hay nada guardado (primera vez, sin internet), se cae al
-        // comportamiento normal del navegador (su propia pantalla de error).
-        caches.match(req).then((cached) => cached || Promise.reject('sin caché'))
-      )
+    new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject('timeout'), esPagina ? 8000 : 4000);
+      red.then((r) => { clearTimeout(t); resolve(r); }, (e) => { clearTimeout(t); reject(e); });
+    }).catch(() => caches.match(req).then((cached) => cached || red))
   );
 });
