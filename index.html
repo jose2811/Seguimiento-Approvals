@@ -165,7 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.14</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small>v1.1.15</small><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -347,9 +347,13 @@ async function readXlsx(buf){
 let DB=load(), HOY=hoyISO();
 function blank(){return {v:1,cfg:{abr:1},cuentas:{},ev:{},imports:[]};}
 function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);if(d&&d.cuentas){d.cfg=d.cfg||{};if(!d.cfg.abr){Object.values(d.cuentas).forEach(c=>c.nombre=abrevia(c.nombre));d.cfg.abr=1;try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}}return d;}}}catch(e){}return blank();}
-let SAVE_AVISO=false;
-// Si la copia local ya no cabe (pasa con toda la subdirección en celular), se borra para dejar espacio a las capturas pendientes; los datos se vuelven a bajar de la nube
-function save(){if(SAVE_AVISO)return;try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){SAVE_AVISO=true;try{localStorage.removeItem(KEY);}catch(_){}persistQ();console.warn('Copia local desactivada: no cabe en este navegador. Los datos y capturas siguen en la nube.',e);}}
+/* Copia local para abrir rápido: localStorage mientras quepa; si no cabe (toda la subdirección en celular) se pasa a IndexedDB, que tiene mucho más espacio */
+const KEYIDB='segAceptados_idb';let USE_IDB=(()=>{try{return localStorage.getItem(KEYIDB)==='1';}catch(e){return false;}})(),BOOTING=true,IDB_T=null;
+const idb=(mode,fn)=>new Promise((ok,ko)=>{try{const r=indexedDB.open('segAceptados',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onerror=()=>ko(r.error);
+  r.onsuccess=()=>{const db=r.result,tx=db.transaction('kv',mode),st=tx.objectStore('kv');let out;const q=fn(st);if(q)q.onsuccess=()=>{out=q.result;};tx.oncomplete=()=>{db.close();ok(out);};tx.onerror=tx.onabort=()=>{db.close();ko(tx.error);};};}catch(e){ko(e);}});
+const idbGet=k=>idb('readonly',st=>st.get(k)),idbSet=(k,v)=>idb('readwrite',st=>st.put(v,k));
+function saveIDB(){clearTimeout(IDB_T);IDB_T=setTimeout(()=>{idbSet(KEY,DB).catch(e=>console.warn('No se pudo guardar la copia local',e));},800);}
+function save(){if(USE_IDB)return saveIDB();try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){USE_IDB=true;try{localStorage.removeItem(KEY);localStorage.setItem(KEYIDB,'1');}catch(_){}persistQ();saveIDB();}}
 let VISTA=(()=>{try{return localStorage.getItem(KEYV)||'GP';}catch(e){return 'GP';}})();
 /* Niveles: admin (carga archivos, ve todo) · subdireccion (todo) · regional (su región) · gerente (su sucursal) */
 const REG=s=>(DB.reg&&DB.reg[s])||'';
@@ -990,6 +994,8 @@ function render(){HOY=hoyISO();pintaUpd();$('#vLista').hidden=TAB!=='lista';$('#
 function renderLista(){
   const all=visibles();
   if(!all.length&&!ES_GP()){$('#vLista').innerHTML=`<div class="empty"><b>Sin cuentas por ahora</b><br>Aquí aparecen los aceptados de tu sucursal en cuanto José carga el funnel.</div>`;return;}
+  if(!all.length&&(BOOTING||SYNC.estado==='run')){$('#vLista').innerHTML='<div class="empty">⏳ <b>Cargando datos…</b><br>Un momento, estamos trayendo la información de la nube.</div>';return;}
+  if(!all.length&&!ES_GP()){$('#vLista').innerHTML='<div class="empty"><b>Aún no hay cuentas en tu vista.</b><br>Aparecen en cuanto se cargan los archivos del día.</div>';return;}
   if(!all.length){$('#vLista').innerHTML=`<div class="empty"><b>Sin datos todavía</b><br><b>1.</b> Carga tu control (Detalle Region approvals) para arrancar la base.<br><b>2.</b> Después carga cada día el funnel (y si quieres Nuevos y Renovaciones), los 3 de una vez.<br>Solo se guardan los aceptados y las columnas de seguimiento.<br><button class="btn" onclick="document.getElementById('fx').click()">📥 Cargar archivos</button></div>`;return;}
   const ab=all.filter(s=>s.abierto);
   const k={ab:ab.length,a30:ab.filter(s=>s.dias>30).length,venc:ab.filter(s=>s.venc).length,rep:ab.filter(s=>s.repros>=2).length};
@@ -1477,6 +1483,7 @@ function exportaTablaEmb(){
 }
 function renderEmb(){
   const el=$('#vEmb'),all0=visibles();if(!E.exp)E.exp=new Set();
+  if(!all0.length&&(BOOTING||SYNC.estado==='run')){el.innerHTML='<div class="empty">⏳ <b>Cargando datos…</b></div>';return;}
   if(!all0.length){el.innerHTML='<div class="empty">Aún no hay cuentas. Aparecen en cuanto se carga el funnel.</div>';return;}
   if(!MULTI()){E.reg='';E.suc='';}
   const r=rangoDe(E.per);if(E.per!=='pers'){E.desde=r.desde;E.hasta=r.hasta;}
@@ -1615,8 +1622,11 @@ function renderConc(){
   const cp=$('#cPer');if(cp)cp.onchange=e=>{C.cper=e.target.value;renderConc();};
 }
 
-reindex();fillVista();
-if(SES&&SES.perfil){aplicaPerfil();render();sincroniza(false);}else{render();showLogin();}
+(async()=>{
+  if(USE_IDB&&!Object.keys(DB.cuentas).length){if(SES&&SES.perfil){const v=document.getElementById('vLista');if(v)v.innerHTML='<div class="empty">⏳ <b>Cargando datos…</b></div>';}try{const d=await idbGet(KEY);if(d&&d.cuentas)DB=d;}catch(e){console.warn('Sin copia local',e);}}
+  BOOTING=false;reindex();fillVista();
+  if(SES&&SES.perfil){aplicaPerfil();render();sincroniza(false);}else{render();showLogin();}
+})();
 // Copia guardada para abrir aunque no haya señal (mismo esquema que la Agenda del Asesor)
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 </script>
