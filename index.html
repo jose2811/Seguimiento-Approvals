@@ -165,7 +165,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.17</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.18</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -595,7 +595,8 @@ function apvAgg(map,pick,r){
   const sem={},dia={};let fmax='';
   for(const [,row] of pick){
     const g=k=>map[k]==null?'':row[map[k]];
-    const w=String(g('sem')||'').trim();if(!/^\d{4}-\d{1,2}$/.test(w))continue;
+    // Si la columna "Semana" viene vacía (pasa con renovaciones en el funnel reciente), se saca de la fecha de solicitud
+    let w=String(g('sem')||'').trim();if(!/^\d{4}-\d{1,2}$/.test(w)){const fs=toISODate(g('fsol'));if(!fs)continue;w=semDe(fs);}
     const s=String(g('suc')||'').trim()||'SIN SUCURSAL',a=String(g('asesor')||'').trim()||'(sin asesor)';
     const seg=String(g('seg')||''),est=String(g('est')||'');
     const acc=/ACEPTADO/i.test(seg)||(!seg&&/ACEPTADO|MESA|DESEMB/i.test(est))?1:0,nv=/nuevo/i.test(String(g('tipo')||''))?1:0;
@@ -607,7 +608,7 @@ function apvAgg(map,pick,r){
   const ws=Object.keys(sem).sort(cmpSem);if(!ws.length)return;
   const prev=(DB.cfg.apv&&DB.cfg.apv.sem)||{};
   // semanas ya cerradas (más de 2 semanas atrás) se congelan: el funnel puede ir soltando filas viejas
-  const corte=semDe(addDays(hoyISO(),-14));
+  const corte=semDe(addDays(hoyISO(),-21));
   for(const w of ws)if(prev[w]&&cmpSem(w,corte)<0)delete sem[w];
   const pd=(DB.cfg.apv&&DB.cfg.apv.dia)||{},dC=addDays(hoyISO(),-14),dV=addDays(hoyISO(),-200);
   for(const d in dia)if(pd[d]&&d<dC)delete dia[d];
@@ -1384,8 +1385,8 @@ function renderApv(){
   const diasH=w=>{const l=lunesSem(w);let n=0;for(let i=0;i<5;i++){const d=new Date(l.getTime()+i*864e5).toISOString().slice(0,10);if(d<=D.fmax)n++;}return n;};
   const semaf=(n,d)=>!d?'':n<APV_MIN*d?'m-r':n<APV_META*d?'m-a':'m-v';const dH=diasH(A.sem);
   const T=tot(A.sem),hoyW=semDe(HOY),cur=semN(A.sem)===hoyW,ult=semN(ws[ws.length-1]);
-  const row=(name,t,attr,cls,c0)=>`<tr ${attr||''} class="${cls||''}"${attr?' style="cursor:pointer"':''}><td>${esc(name)}${attr?' <span style="color:var(--mut)">›</span>':''}</td><td class="${c0||''}">${t[0]}</td><td>${t[1]}</td><td><b>${pct(t[1],t[0])}</b></td></tr>`;
-  const head=f=>`<tr><th>${f}</th><th>Approvals</th><th>Acept.</th><th>%</th></tr>`;
+  const row=(name,t,attr,cls,c0)=>`<tr ${attr||''} class="${cls||''}"${attr?' style="cursor:pointer"':''}><td>${esc(name)}${attr?' <span style="color:var(--mut)">›</span>':''}</td><td class="${c0||''}">${t[0]}</td><td style="color:var(--mut)">${t[2]}</td><td style="color:var(--mut)">${t[0]-t[2]}</td><td>${t[1]}</td><td><b>${pct(t[1],t[0])}</b></td></tr>`;
+  const head=f=>`<tr><th>${f}</th><th>Approvals</th><th title="Approvals de clientes nuevos">Nuevos</th><th title="Approvals de renovaciones">Renov.</th><th>Acept.</th><th>%</th></tr>`;
   let tabla='';
   if(!A.ase){
     if(!A.suc&&!Rg){const rs=[...new Set(scope.map(x=>REG(x)||'(sin región)'))].sort();
@@ -1411,14 +1412,14 @@ function renderApv(){
     <div class="frow"><select id="aSem">${ws.slice().reverse().map(w=>`<option value="${w}" ${w===A.sem?'selected':''}>${semL(w)}${semN(w)===hoyW?' (en curso)':''}</option>`).join('')}</select></div>
     ${back}<h3>${nivel}</h3>
     <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi"><b>${T[0]}</b><span>Approvals</span></div>
+      <div class="kpi"><b>${T[0]}</b><span>Approvals</span><small style="display:block;font-size:11px;color:var(--mut);margin-top:2px">${T[2]} nuevos · ${T[0]-T[2]} renov.</small></div>
       <div class="kpi"><b style="color:var(--ok)">${T[1]}</b><span>Aceptados</span></div>
       <div class="kpi"><b>${pct(T[1],T[0])}</b><span>% aceptados</span></div>
     </div>
     ${strip}
     <p class="note">Datos al cierre de <b>${fmt(D.fmax)}</b> (carga del ${fmtTs(D.ts)}). ${cur?'Semana en curso: lo de hoy sale en la carga de mañana.':''}${ult!==hoyW&&semN(A.sem)===ult&&cmpSem(ult,hoyW)<0?'La semana actual aparece desde la carga del martes (trae los approvals del lunes).':''} De los aceptados, ${T[3]} son nuevos.</p>
     ${tabla}</div>
-  <div class="panel">${trend}<p class="note">• = semana en curso. Semana según la columna "Semana" del funnel. Approvals = todas las consultas (nuevos y renovaciones); aceptados = A, B y C.</p></div>`;
+  <div class="panel">${trend}<p class="note">• = semana en curso. Semana según la columna "Semana" del funnel. Approvals = todas las consultas: nuevos + renovaciones (según la columna Tipo del funnel); aceptados = A, B y C.</p></div>`;
   $('#aSem').onchange=e=>{A.sem=e.target.value;renderApv();};
   if($('#aBack'))$('#aBack').onclick=()=>{if(A.ase)A.ase='';else if(A.suc)A.suc='';else A.reg='';renderApv();};
   el.querySelectorAll('[data-reg]').forEach(tr=>tr.onclick=()=>{A.reg=tr.dataset.reg;A.suc='';A.ase='';renderApv();});
