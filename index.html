@@ -119,6 +119,15 @@ h4{margin:14px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.03e
 .erow .en{grid-area:n;text-align:right}.erow .en b{font-size:20px;margin-right:6px}
 .erow .eb{grid-area:b;height:8px;background:#eef2f7;border-radius:4px;overflow:hidden}.erow .eb i{display:block;height:100%;border-radius:4px}
 .erow .ego{grid-area:g;color:var(--mut);font-size:18px}
+/* Concentrado y Approvals: encabezado y primera columna fijos, filas alternadas (como el Embudo) */
+#vConc .tw,#vApv .tw{max-height:75vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+#vConc table,#vApv table{border-collapse:separate;border-spacing:0}
+#vConc tr,#vApv tr{background:#fff}#vConc tr:nth-child(even),#vApv tr:nth-child(even){background:#f6f8fa}
+#vConc tr.tot,#vApv tr.tot{background:#eef2f6}#vConc tr.tot td,#vApv tr.tot td{font-weight:700}
+#vConc tr:hover,#vApv tr:hover{background:#eef6ff}
+#vConc th,#vApv th{position:sticky;top:0;z-index:2;background:#fff;box-shadow:0 1px 0 var(--line)}
+#vConc td:first-child,#vConc th:first-child,#vApv td:first-child,#vApv th:first-child{position:sticky;left:0;z-index:1;background:inherit;text-align:left;box-shadow:1px 0 0 var(--line)}
+#vConc th:first-child,#vApv th:first-child{z-index:3;background:#fff;box-shadow:1px 1px 0 var(--line)}
 .etw{max-height:75vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
 .etab{border-collapse:separate;border-spacing:0}
 .etab tr{background:#fff}.etab tr:nth-child(even){background:#f6f8fa}
@@ -165,7 +174,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.18</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.19</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
