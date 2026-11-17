@@ -174,7 +174,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.19</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.20</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -975,7 +975,7 @@ const FILTROS_SIMPLE=['f_abiertos','f_venc','f_hoy','f_sing','f_cerr'];
 const FILTROS_SIMPLE_SI_HAY=['f_desac','f_mesa10','f_sinmot']; // solo aparece mientras haya algo que limpiar
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
-const F={q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null,ord:'',lim:300,_k:''};
+const F={qx:[],q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null,ord:'',lim:300,_k:''};
 let LAST_LIST=null; // lo que se ve en Pendientes con todos sus filtros: es lo que se exporta
 const FILTROS=[
   ['f_abiertos','Abiertos',s=>s.abierto],
@@ -1015,7 +1015,10 @@ function renderLista(){
   const asesores=[...new Set(base.map(s=>s.asesorAct))].filter(Boolean).sort();
   if(F.asesor&&!asesores.includes(F.asesor))F.asesor='';
   const FL=SIMPLE()?FILTROS.filter(f=>FILTROS_SIMPLE.includes(f[0])||(FILTROS_SIMPLE_SI_HAY.includes(f[0])&&(F.q===f[0]||base.some(f[2])))):FILTROS;if(!FL.some(f=>f[0]===F.q))F.q='f_abiertos';
-  const fn=F.emb?(s=>embDe(s)===F.emb.k&&(!F.emb.desac||s.desac)&&(!F.emb.pdes||s.etapa==='Por desembolsar')):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
+  // Varias pastillas a la vez: se suman (una cuenta que cumple dos solo aparece una vez)
+  F.qx=(F.qx||[]).filter(k=>FL.some(f=>f[0]===k));if(!F.qx.includes(F.q))F.qx=F.q==='f_abiertos'?[]:[F.q];
+  const QX=F.qx.map(k=>FL.find(f=>f[0]===k)[2]);
+  const fn=F.emb?(s=>embDe(s)===F.emb.k&&(!F.emb.desac||s.desac)&&(!F.emb.pdes||s.etapa==='Por desembolsar')):QX.length>1?(s=>QX.some(fn=>fn(s))):FL.find(f=>f[0]===F.q)[2],q=norm(F.txt);const c30=cierre30(base),pa=promAb(base);
   let list=base.filter(s=>fn(s)&&(!F.asesor||s.asesorAct===F.asesor)&&(!q||norm(s.c.nombre).includes(q)||s.c.id.includes(q)));
   list.sort(F.q==='f_cerr'?(a,b)=>(b.evs.at(-1)?.ts||'').localeCompare(a.evs.at(-1)?.ts||''):(a,b)=>(b.venc-a.venc)||(b.dias-a.dias));
   // Se muestran de 300 en 300 para que no se trabe el celular; con "Ver más" se llega a todas. El orden y el exportar siempre cubren la lista completa.
@@ -1048,7 +1051,7 @@ function renderLista(){
   </div>`}
   <div class="note" style="margin:-2px 2px 8px">⏱ Cierre promedio (últimos 30 días): <b>${c30.prom??'—'} días</b> desde la solicitud · ${c30.n} cerradas</div>
   ${F.emb?`<div class="panel" style="padding:8px 10px;margin-bottom:8px;border:2px solid var(--brand);display:flex;gap:8px;align-items:center"><div style="flex:1">🔻 <b>Embudo: ${esc(embNom(F.emb.k))}${F.emb.dp?' del periodo (por fecha de desembolso)':''}${F.emb.desac?' · ⚠ solo según gerente':''}${F.emb.pdes?' · ⏳ gerente dice autorizada':''}</b><br><small style="color:var(--mut)">${F.emb.dp?'Desembolsados '+esc(rangoTxt(F.emb))+', sin importar cuándo se solicitaron':'Aceptados con solicitud '+esc(rangoTxt(F.emb))}</small></div><button class="btn sec" id="embBack" style="padding:4px 10px">← Embudo</button><button class="btn sec" id="embX" style="padding:4px 10px">✕ Quitar</button></div>`:''}
-  <div class="filters">${FL.map(f=>`<button class="fchip ${F.q===f[0]&&!F.emb?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
+  <div class="filters">${FL.map(f=>`<button class="fchip ${!F.emb&&(F.qx.length?F.qx.includes(f[0]):f[0]==='f_abiertos')?'on':''}" data-q="${f[0]}">${f[1]} <small>(${base.filter(f[2]).length})</small></button>`).join('')}</div>
   <div class="frow">
     ${regsL.length>1?`<select id="fReg"><option value="">Todas las regiones</option>${regsL.map(x=>`<option value="${esc(x)}" ${F.reg===x?'selected':''}>${esc(tit(x))}</option>`).join('')}</select>`:''}
     ${MULTI()?`<select id="fSuc"><option value="">Todas las sucursales</option>${sucs.map(x=>`<option ${F.suc===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}
@@ -1057,11 +1060,14 @@ function renderLista(){
     <input id="fTxt" placeholder="Buscar nombre o ID" value="${esc(F.txt)}">
   </div>
   ${chipsAse}
-  <div class="count" style="display:flex;align-items:center;gap:8px"><span style="flex:1">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>shown.length?' · mostrando '+shown.length:''}</span><select id="fOrd" style="width:auto;padding:3px 6px;font-size:12px"><option value="">Más días primero</option><option value="rec" ${F.ord==='rec'?'selected':''}>Más recientes primero</option></select>${list.length?`<button class="btn sec" id="lCsv" style="padding:3px 10px;font-size:12px">📤 Exportar estas ${list.length}</button>`:''}</div>
+  <div class="count" style="display:flex;align-items:center;gap:8px"><span style="flex:1">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>shown.length?' · mostrando '+shown.length:''}${F.qx.length>1&&!F.emb?' · '+F.qx.length+' filtros sumados, sin repetir':''}</span><select id="fOrd" style="width:auto;padding:3px 6px;font-size:12px"><option value="">Más días primero</option><option value="rec" ${F.ord==='rec'?'selected':''}>Más recientes primero</option></select>${list.length?`<button class="btn sec" id="lCsv" style="padding:3px 10px;font-size:12px">📤 Exportar estas ${list.length}</button>`:''}</div>
   ${cuerpo||'<div class="empty">Nada en este filtro 👍</div>'}
   ${list.length>shown.length?`<div class="panel" style="text-align:center"><p class="note" style="margin:0 0 8px">Vas en ${shown.length} de ${list.length}. Faltan <b>${list.length-shown.length}</b>.</p><div class="row" style="justify-content:center;gap:8px"><button class="btn" id="lMas">Ver ${Math.min(300,list.length-shown.length)} más</button><button class="btn sec" id="lTodas">Ver todas</button></div></div>`:''}`;
   document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{F.asesor=b.dataset.a;renderLista();});
-  document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.q=b.dataset.q;F.emb=null;renderLista();});
+  document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.q=b.dataset.q;F.qx=[];F.emb=null;renderLista();});
+  // pastillas: tocar prende/apaga y se pueden combinar; "Abiertos" regresa a una sola
+  document.querySelectorAll('.fchip[data-q]').forEach(b=>b.onclick=()=>{const k=b.dataset.q;F.emb=null;
+    if(k==='f_abiertos'||F.emb){F.qx=[];F.q='f_abiertos';}else{const i=F.qx.indexOf(k);if(i>=0)F.qx.splice(i,1);else F.qx.push(k);F.q=F.qx[0]||'f_abiertos';}renderLista();});
   if($('#embX'))$('#embX').onclick=()=>{F.emb=null;F.q='f_abiertos';F.reg='';F.suc='';F.asesor='';renderLista();};
   if($('#embBack'))$('#embBack').onclick=()=>irTab('emb');
   if($('#lCsv'))$('#lCsv').onclick=exportaCSV;
