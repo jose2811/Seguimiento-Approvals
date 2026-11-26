@@ -175,7 +175,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.2.16</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.2.17</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -985,7 +985,7 @@ const FILTROS_SIMPLE_SI_HAY=['f_sinmonto','f_desac','f_mesa10','f_sinmot']; // s
 function cierre30(arr){const d=addDays(HOY,-30),c=arr.filter(s=>s.diasCierre!=null&&s.fC>=d);return {n:c.length,prom:c.length?Math.round(c.reduce((a,s)=>a+s.diasCierre,0)/c.length):null};}
 const promAb=arr=>{const a=arr.filter(s=>s.abierto);return a.length?Math.round(a.reduce((x,s)=>x+s.dias,0)/a.length):null;};
 const F={qx:[],q:'f_abiertos',reg:'',suc:'',asesor:'',seg:'',txt:'',emb:null,ord:'',lim:300,_k:''};
-let LAST_LIST=null; // lo que se ve en Pendientes con todos sus filtros: es lo que se exporta
+let LAST_LIST=null,LAST_TIT=''; // lo que se ve en Pendientes con todos sus filtros: es lo que se exporta
 const FILTROS=[
   ['f_abiertos','Abiertos',s=>s.abierto],
   ['f_venc','Compromiso vencido',s=>s.venc],
@@ -1035,7 +1035,8 @@ function renderLista(){
   const fk=JSON.stringify([VISTA,F.q,F.reg,F.suc,F.asesor,F.seg,F.txt,F.emb,F.ord]);if(fk!==F._k){F._k=fk;F.lim=300;}
   if(F.q==='f_mesa10'||(F.emb&&F.emb.k==='mesa'))list.sort((a,b)=>b.diasMesa-a.diasMesa);
   if(F.ord==='rec')list.sort((a,b)=>(b.c.fsol||'').localeCompare(a.c.fsol||'')||(b.venc-a.venc));
-  LAST_LIST=list;const shown=list.slice(0,F.lim);
+  LAST_LIST=list;LAST_TIT=F.emb?'Embudo: '+embNom(F.emb.k)+(F.emb.dp?' del periodo':'')+(F.emb.desac?' · solo según gerente':'')+(F.emb.pdes?' · gerente dice autorizada':''):(F.qx.length?F.qx.map(k=>(FL.find(f=>f[0]===k)||[,k])[1]).join(' + '):'Abiertos');
+  const shown=list.slice(0,F.lim);
   const corto=n=>{const t=String(n||'').trim().split(/\s+/);if(t.length<2)return tc(t[0]||'');return tc(t[0])+' '+tc(t.length>=4?t[2]:t[1]);};
   const pend=a=>a.filter(s=>s.abierto&&(s.venc||s.hoyC||s.sinGestion)).length;
   const verChips=!MULTI()||!!F.suc;
@@ -1070,7 +1071,7 @@ function renderLista(){
     <input id="fTxt" placeholder="Buscar nombre o ID" value="${esc(F.txt)}">
   </div>
   ${chipsAse}
-  <div class="count" style="display:flex;align-items:center;gap:8px"><span style="flex:1">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>shown.length?' · mostrando '+shown.length:''}${F.qx.length>1&&!F.emb?' · '+F.qx.length+' filtros sumados, sin repetir':''}</span><select id="fOrd" style="width:auto;padding:3px 6px;font-size:12px"><option value="">Más días primero</option><option value="rec" ${F.ord==='rec'?'selected':''}>Más recientes primero</option></select>${list.length?`<button class="btn sec" id="lCsv" style="padding:3px 10px;font-size:12px">📤 Exportar estas ${list.length}</button>`:''}</div>
+  <div class="count" style="display:flex;align-items:center;gap:8px"><span style="flex:1">${F.asesor?'<b>'+esc(F.asesor)+'</b> · ':''}${list.length} cuenta${list.length===1?'':'s'}${list.length>shown.length?' · mostrando '+shown.length:''}${F.qx.length>1&&!F.emb?' · '+F.qx.length+' filtros sumados, sin repetir':''}</span><select id="fOrd" style="width:auto;padding:3px 6px;font-size:12px"><option value="">Más días primero</option><option value="rec" ${F.ord==='rec'?'selected':''}>Más recientes primero</option></select>${list.length?`<button class="btn sec" id="lWa" style="padding:3px 10px;font-size:12px" title="Arma un mensaje con estas cuentas para preguntar por WhatsApp">💬 WhatsApp</button><button class="btn sec" id="lCsv" style="padding:3px 10px;font-size:12px">📤 Exportar estas ${list.length}</button>`:''}</div>
   ${cuerpo||'<div class="empty">Nada en este filtro 👍</div>'}
   ${list.length>shown.length?`<div class="panel" style="text-align:center"><p class="note" style="margin:0 0 8px">Vas en ${shown.length} de ${list.length}. Faltan <b>${list.length-shown.length}</b>.</p><div class="row" style="justify-content:center;gap:8px"><button class="btn" id="lMas">Ver ${Math.min(300,list.length-shown.length)} más</button><button class="btn sec" id="lTodas">Ver todas</button></div></div>`:''}`;
   document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{F.asesor=b.dataset.a;renderLista();});
@@ -1081,6 +1082,7 @@ function renderLista(){
   if($('#embX'))$('#embX').onclick=()=>{F.emb=null;F.q='f_abiertos';F.reg='';F.suc='';F.asesor='';renderLista();};
   if($('#embBack'))$('#embBack').onclick=()=>irTab('emb');
   if($('#lCsv'))$('#lCsv').onclick=exportaCSV;
+  if($('#lWa'))$('#lWa').onclick=()=>mensajeWA(LAST_LIST||[]);
   if($('#fOrd'))$('#fOrd').onchange=e=>{F.ord=e.target.value;renderLista();};
   const mas=n=>{const y=scrollY;F.lim+=n;renderLista();window.scrollTo(0,y);};
   if($('#lMas'))$('#lMas').onclick=()=>mas(300);if($('#lTodas'))$('#lTodas').onclick=()=>mas(1e6);
@@ -1709,6 +1711,37 @@ async function forzarActualizacion(){
   location.replace(location.pathname+'?v='+Date.now());
 }
 document.getElementById('bForzar')&&(document.getElementById('bForzar').onclick=forzarActualizacion);
+
+/* 💬 Mensaje de WhatsApp con lo que está filtrado, para preguntar cuenta por cuenta */
+const WA_MAX=40;
+async function mensajeWA(list){
+  if(!list.length)return toast('No hay cuentas en este filtro');
+  const fd=d=>d?fmt(d,false):'';
+  const donde=[F.suc?tit(F.suc.replace('CI-','')):F.reg?'Región '+tit(F.reg):vistaNombre(),F.asesor?corto(F.asesor):''].filter(Boolean).join(' · ');
+  const L=['*'+LAST_TIT+'*'+(F.txt?' · búsqueda "'+F.txt+'"':''),donde+' · '+list.length+' cuenta'+(list.length===1?'':'s')+' · al '+fd(HOY),''];
+  const g={};list.slice(0,WA_MAX).forEach(s=>{const k=tit(s.c.suc.replace('CI-',''))+'|'+(s.asesorAct||'(sin asesor)');(g[k]=g[k]||[]).push(s);});
+  const multiSuc=new Set(list.map(s=>s.c.suc)).size>1;
+  for(const k of Object.keys(g).sort()){const [suc,ase]=k.split('|');L.push('*'+(multiSuc?suc+' · ':'')+corto(ase)+'*');
+    for(const s of g[k]){
+      const est=s.cierre==='rech'?'Rechazado'+(s.rech&&s.rech.motivo?' ('+s.rech.motivo+')':''):s.cierre?'Desembolsado':(s.etapa||'Sin gestión');
+      const bits=[est,s.dias+(s.dias===1?' día':' días')];
+      if(s.abierto&&s.fprog)bits.push((s.venc?'⚠ compromiso vencido ':'compromiso ')+fd(s.fprog));
+      if(s.repros>=2)bits.push('reprogramado '+s.repros+' veces');
+      if(s.abierto&&s.c.mres==='A')bits.push('mesa ya autorizó');
+      else if(s.abierto&&s.sisMesa)bits.push('en mesa');
+      else if(s.abierto&&s.c.ll&&LLEN[s.c.ll]&&s.c.ll!=='e')bits.push('sistema: '+LLEN[s.c.ll].toLowerCase());
+      if(s.desac)bits.push('⚠ no cuadra con sistema');
+      L.push('• '+s.c.nombre+' (#'+s.c.id+') — '+bits.join(' · '));
+      if(s.lastCom)L.push('   💬 '+s.lastCom.slice(0,120)+(s.lastComF?' ('+fd(s.lastComF)+')':''));
+    }
+    L.push('');}
+  if(list.length>WA_MAX)L.push('…y '+(list.length-WA_MAX)+' más (exporta la lista para verlas todas).','');
+  L.push('¿Qué pasó con estas cuentas? Por favor actualicen en Approvals la etapa, fecha compromiso o motivo de cada una.');
+  const txt=L.join('\n');
+  try{if(navigator.share&&/Android|iPhone|iPad/i.test(navigator.userAgent)){await navigator.share({text:txt});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  try{await navigator.clipboard.writeText(txt);toast('✔ Mensaje copiado ('+Math.min(list.length,WA_MAX)+' cuentas). Pégalo en WhatsApp.');}
+  catch(e){const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy');toast('✔ Mensaje copiado. Pégalo en WhatsApp.');}catch(_){alert(txt);}t.remove();}
+}
 </script>
 </body>
 </html>
