@@ -174,7 +174,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <body>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.24</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.1.25</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -237,21 +237,21 @@ const ETAPA_XL={'visita asesor':'Visita asesor','validacion gerente':'Validació
 const MOT_REASIG=['Asesor ya no labora / cartera heredada','Asesor sin seguimiento (no se involucra)','Cliente pide otro asesor','Otro'];
 const MOT_REPRO=['Cliente no estaba','Cliente pidió cambiar la fecha','Falta documento','Gerente / asesor no llegó','Otro'];
 const RECH={
-  'Perfil (gerente / asesor)':['Historial / atrasos / buró','Negocio pequeño / poco inventario','No es su negocio / prestanombres','Sin negocio / negocio muy nuevo','Tipo de negocio / perfil no apto','Otro'],
-  'Mesa de análisis':['Buró','Otro'],
-  'Cliente':['No consiguió aval o documentos','Tasa de interés / le pareció caro','Pospone / se espera','Ya no lo quiere / no por el momento'],
+  'Perfil (gerente / asesor)':['Mal historial crediticio','Perfil de negocio','Prestanombres','Sobreendeudamiento','No cumple con las condiciones del crédito','No cuenta con un aval'],
+  'Mesa de análisis':['Buró','Capacidad de pago','Información inconsistente','Sin detalle','Otro'],
+  'Cliente':['Ya no lo quiere / no por el momento','Tasa de interés / le pareció caro','Pospone / se espera','No consiguió aval o documentos','Se fue con otra financiera','No localizable','No le convenció el monto aprobado','Otro'],
 };
 const CAT_SC='Sin clasificar',CAT_PERFIL='Perfil (gerente / asesor)', CAT_MESA='Mesa de análisis';
 /* Clasificación de comentarios libres del control histórico (orden importa) */
 const REGLAS=[
-  [/mesa|\bmea\b|\brec\. ?mesa/, 'Mesa de análisis', m=>/buro/.test(m)?'Buró':'Otro'],
-  [/prestanombre|no es su negocio|no es para ella|la van a operar/, CAT_PERFIL,'No es su negocio / prestanombres'],
-  [/peque|pqueñ|pequn|inventario|mercancia/, CAT_PERFIL,'Negocio pequeño / poco inventario'],
-  [/no tiene negocio|no presenta negocio|empezando|poco tiempo/, CAT_PERFIL,'Sin negocio / negocio muy nuevo'],
-  [/zona/, CAT_PERFIL,'Otro'],
-  [/tipo de negocio|perfil|tianguis|taxi|no apto|arraigo|vinos/, CAT_PERFIL,'Tipo de negocio / perfil no apto'],
-  [/atraso|pago mal|adeudo|lista negra|buro|grupal|referencias|vobo/, CAT_PERFIL,'Historial / atrasos / buró'],
-  [/recursos|no puede pagar|capacidad/, CAT_PERFIL,'Otro'],
+  [/mesa|\bmea\b|\brec\. ?mesa/, 'Mesa de análisis', m=>/buro/.test(m)?'Buró':'Sin detalle'],
+  [/prestanombre|no es su negocio|no es para ella|la van a operar/, CAT_PERFIL,'Prestanombres'],
+  [/peque|pqueñ|pequn|inventario|mercancia/, CAT_PERFIL,'Perfil de negocio'],
+  [/no tiene negocio|no presenta negocio|empezando|poco tiempo/, CAT_PERFIL,'Perfil de negocio'],
+  [/zona/, CAT_PERFIL,'Perfil de negocio'],
+  [/tipo de negocio|perfil|tianguis|taxi|no apto|arraigo|vinos/, CAT_PERFIL,'Perfil de negocio'],
+  [/atraso|pago mal|adeudo|lista negra|buro|grupal|referencias|vobo/, CAT_PERFIL,'Mal historial crediticio'],
+  [/recursos|no puede pagar|capacidad|sobreendeud/, CAT_PERFIL,'Sobreendeudamiento'],
   [/interes|tasa|caro|precio/, 'Cliente','Tasa de interés / le pareció caro'],
   [/\baval\b/, 'Cliente','No consiguió aval o documentos'],
   [/no lo quiere|no quiere|no le interesa|no lo requiere|no por el momento|dejo de operar|sobreendeudar/, 'Cliente','Ya no lo quiere / no por el momento'],
