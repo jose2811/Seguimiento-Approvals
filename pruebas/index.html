@@ -175,7 +175,7 @@ footer{text-align:center;font-size:11px;color:var(--mut);padding:16px}
 <div style="background:#f59e0b;color:#111;text-align:center;font:700 13px system-ui;padding:6px">⚠ AMBIENTE DE PRUEBAS · datos de prueba, no es la app oficial</div>
 <header>
   <div class="hrow">
-    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.2.22</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
+    <div class="htitle"><img class="logo" src="../icons/crediclub-wordmark.png?v=1" alt="crediclub"><span class="app">Approvals</span><small id="ver">v1.2.23</small><button id="bForzar" title="Forzar actualización de la app" style="background:none;border:0;padding:0 2px;margin-left:2px;cursor:pointer;font-size:13px;line-height:1;opacity:.85">🔄</button><small id="who" style="display:block;margin:0;opacity:.85"></small></div>
     <select id="vista" class="hsel" title="Vista" hidden></select>
     <button class="hbtn" id="bSync" hidden>☁</button>
     <button class="hbtn" id="bImport" hidden>📥 Cargar archivos</button>
@@ -1267,7 +1267,7 @@ function openDetalle(id){
     <div class="row"><button class="btn sec" data-cancel>Cancelar</button><button class="btn" id="v_ok">Reactivar</button></div>
   </div>
   <div class="form" id="f-rech">
-    <label>¿Quién rechaza?</label><select id="x_cat">${rechCats}</select>
+    <input type="hidden" id="x_cat" value="${CAT_PERFIL}">
     <label>Motivo</label><select id="x_mot"></select>
     <label>Comentario <span id="x_req"></span></label><textarea id="x_com"></textarea>
     <div class="note">Queda en el historial. Si después se recupera, se puede reactivar.</div>
